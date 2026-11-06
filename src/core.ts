@@ -81,22 +81,25 @@ export const money = (c: number) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
     c / 100,
   );
+export function scheduledTarget(p: Profile, date: string) {
+  const plan = [...p.plans]
+    .sort((a, b) => b.from.localeCompare(a.from))
+    .find((x) => x.from <= date);
+  if (!plan) return 0;
+  const days = [...plan.days].sort((a, b) => a - b),
+    i = days.indexOf(DateTime.fromISO(date).weekday);
+  return i < 0
+    ? 0
+    : Math.floor(plan.seconds / days.length) +
+        (i < plan.seconds % days.length ? 1 : 0);
+}
 export function target(p: Profile, date: string, days: Day[]) {
   if (
     date > today(p.zone) ||
     days.some((d) => d.profileId === p.id && d.date === date && d.absence)
   )
     return 0;
-  const plan = [...p.plans]
-    .sort((a, b) => b.from.localeCompare(a.from))
-    .find((x) => x.from <= date);
-  if (!plan) return 0;
-  const ds = [...plan.days].sort();
-  const i = ds.indexOf(DateTime.fromISO(date).weekday);
-  return i < 0
-    ? 0
-    : Math.floor(plan.seconds / ds.length) +
-        (i < plan.seconds % ds.length ? 1 : 0);
+  return scheduledTarget(p, date);
 }
 export function resolveRate(s: State, p: Profile, e: Partial<Entry>) {
   const project = s.entities.find((x) => x.id === e.projectId);
@@ -197,12 +200,15 @@ export function validateEntry(s: State, e: Entry) {
     if (
       !Number.isFinite(ps) ||
       ps < previous ||
-      pe < ps ||
+      (pause.end !== undefined && !Number.isFinite(pe)) ||
+      pe <= ps ||
       pe > b ||
       ps < a ||
       (!pause.end && !!e.end)
     )
-      throw Error("Pausen müssen geordnet innerhalb des Eintrags liegen.");
+      throw Error(
+        "Pausen müssen innerhalb des Eintrags liegen, eine positive Dauer haben und dürfen sich nicht überschneiden.",
+      );
     previous = pe;
   }
   const intervals = (x: Entry) => {

@@ -76,14 +76,15 @@ test("CSV Vorschau, Preise und vollständige Sicherung", async ({ page }) => {
   const dl = await pending;
   expect(dl.suggestedFilename()).toContain("backup");
   const raw = await page.evaluate(() => localStorage.getItem("tectracker")!);
-  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator('input[type=file][accept=".json"]').setInputFiles({
+    name: "backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(raw),
+  });
   await page
-    .locator('input[type=file][accept=".json"]')
-    .setInputFiles({
-      name: "backup.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(raw),
-    });
+    .getByRole("dialog")
+    .getByRole("button", { name: "Bestätigen", exact: true })
+    .click();
   await expect
     .poll(() =>
       page.evaluate(() =>

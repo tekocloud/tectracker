@@ -1,4 +1,8 @@
+import Select from "./Select";
+import Modal from "./Modal";
+import { useDialogs } from "./Dialogs";
 import { useState } from "react";
+import GermanDateInput, { germanDate } from "./GermanDateInput";
 import { DateTime } from "luxon";
 import Papa from "papaparse";
 import { download, parseBackup, backupBeforeRestore } from "./storage";
@@ -29,6 +33,7 @@ export default function SettingsPanel({
   error: (s: string) => void;
   attempt: (fn: () => void) => void;
 }) {
+  const { confirm, prompt } = useDialogs();
   const [rows, Rows] = useState<Record<string, string>[]>([]),
     [map, Map] = useState<Record<string, string>>({}),
     [dupes, Dupes] = useState(false),
@@ -37,6 +42,9 @@ export default function SettingsPanel({
   const rates = s.entities.filter(
     (x) => x.profileId === p.id && x.kind === "rate" && !x.archived,
   );
+  const latestPlan = [...p.plans].sort((a, b) =>
+    b.from.localeCompare(a.from),
+  )[0];
   function profile(patch: Partial<Profile>) {
     commit({
       ...s,
@@ -164,8 +172,8 @@ export default function SettingsPanel({
           </label>
           <button
             className="secondary"
-            onClick={() => {
-              const name = prompt("Name des neuen Profils");
+            onClick={async () => {
+              const name = await prompt("Name des neuen Profils");
               if (name?.trim()) {
                 const x: Profile = {
                   id: uid(),
@@ -206,18 +214,18 @@ export default function SettingsPanel({
         <div className="settings-row">
           <label>
             Darstellung
-            <select
+            <Select
               value={s.theme}
               onChange={(e) => commit({ ...s, theme: e.target.value })}
             >
               <option value="system">Systemeinstellung</option>
               <option value="light">Hell</option>
               <option value="dark">Dunkel</option>
-            </select>
+            </Select>
           </label>
           <label>
             Standard-Stundensatz
-            <select
+            <Select
               value={p.rateId || ""}
               onChange={(e) => profile({ rateId: e.target.value })}
             >
@@ -227,7 +235,7 @@ export default function SettingsPanel({
                   {x.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label>
             Zeitzone
@@ -247,9 +255,23 @@ export default function SettingsPanel({
       </section>
       <section className="card padded">
         <h2>Dein Arbeitszeitplan</h2>
+        <div className="settings-row">
+          <label>
+            Arbeitszeitplan für Profil
+            <Select value={p.id} onChange={(e) => setPid(e.target.value)}>
+              {s.profiles
+                .filter((x) => !x.archived)
+                .map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+            </Select>
+          </label>
+        </div>
         <p className="muted">
-          Neue Pläne gelten ab dem gewählten Datum. Frühere Sollwerte bleiben
-          erhalten.
+          Dieser Arbeitszeitplan gilt nur für das Profil „{p.name}“. Neue Pläne
+          gelten ab dem gewählten Datum. Frühere Sollwerte bleiben erhalten.
         </p>
         <form
           key={p.id}
@@ -283,13 +305,13 @@ export default function SettingsPanel({
                 min="0"
                 max="168"
                 step="0.01"
-                defaultValue={p.plans.at(-1)!.seconds / 3600}
+                defaultValue={latestPlan.seconds / 3600}
                 required
               />
             </label>
             <label>
               Gültig ab
-              <input name="from" type="date" defaultValue={date} required />
+              <GermanDateInput name="from" defaultValue={date} required />
             </label>
           </div>
           <div className="weekdays">
@@ -299,7 +321,7 @@ export default function SettingsPanel({
                   name="days"
                   type="checkbox"
                   value={i + 1}
-                  defaultChecked={p.plans.at(-1)!.days.includes(i + 1)}
+                  defaultChecked={latestPlan.days.includes(i + 1)}
                 />
                 <span>{d}</span>
               </label>
@@ -312,62 +334,13 @@ export default function SettingsPanel({
             .sort((a, b) => b.from.localeCompare(a.from))
             .map((x) => (
               <p key={x.from}>
-                Ab {x.from}: <strong>{x.seconds / 3600} h / Woche</strong> auf{" "}
+                Ab {germanDate(x.from)}:{" "}
+                <strong>{x.seconds / 3600} h / Woche</strong> auf{" "}
                 {x.days.length} Tage · {duration(x.seconds / x.days.length)}{" "}
                 täglich
               </p>
             ))}
         </div>
-      </section>
-      <section className="card padded">
-        <h2>Abwesenheiten nachtragen</h2>
-        <form
-          className="settings-row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget),
-              date = String(fd.get("date")),
-              absence = String(fd.get("absence")),
-              old = s.days.find((x) => x.profileId === p.id && x.date === date);
-            commit({
-              ...s,
-              days: [
-                ...s.days.filter(
-                  (x) => !(x.profileId === p.id && x.date === date),
-                ),
-                {
-                  profileId: p.id,
-                  date,
-                  actual: old?.actual || 0,
-                  planned: old?.planned || 0,
-                  absence,
-                },
-              ],
-            });
-          }}
-        >
-          <input
-            aria-label="Abwesenheitsdatum"
-            name="date"
-            type="date"
-            defaultValue={date}
-            required
-          />
-          <select name="absence">
-            <option>Urlaub</option>
-            <option>Krankheit</option>
-            <option>Frei</option>
-            <option value="">Abwesenheit entfernen</option>
-          </select>
-          <button className="secondary">Speichern</button>
-        </form>
-        {s.days
-          .filter((x) => x.profileId === p.id && x.absence)
-          .map((x) => (
-            <p key={x.date}>
-              {x.date} · {x.absence}
-            </p>
-          ))}
       </section>
       <section className="card padded">
         <h2>Import, Export & Datensicherung</h2>
@@ -382,7 +355,7 @@ export default function SettingsPanel({
               download(
                 "tectracker-backup-" + date + ".json",
                 JSON.stringify(s, null, 2),
-              )
+              ).catch((e) => error("Export fehlgeschlagen: " + e))
             }
           >
             ↓ Vollständige Sicherung
@@ -399,9 +372,9 @@ export default function SettingsPanel({
                     .then(async (raw) => {
                       const next = parseBackup(raw);
                       if (
-                        !confirm(
+                        !(await confirm(
                           "Alle Daten ersetzen? Vorher wird automatisch eine lokale Sicherung erstellt.",
-                        )
+                        ))
                       )
                         return;
                       await backupBeforeRestore(s);
@@ -459,14 +432,14 @@ export default function SettingsPanel({
         </div>
       </section>
       {rows.length > 0 && (
-        <div className="modal-backdrop">
+        <Modal title="CSV-Import prüfen" onClose={() => Rows([])}>
           <div className="modal wide">
             <h2>CSV-Import prüfen</h2>
             <p>
               {rows.length} Zeilen · Zielprofil: {p.name}
             </p>
             <div className="settings-row">
-              <select
+              <Select
                 aria-label="Datumsformat"
                 value={format}
                 onChange={(e) => Format(e.target.value)}
@@ -474,7 +447,7 @@ export default function SettingsPanel({
                 <option value="iso">ISO 8601</option>
                 <option value="dd.MM.yyyy HH:mm">TT.MM.JJJJ HH:mm</option>
                 <option value="yyyy-MM-dd HH:mm:ss">JJJJ-MM-TT HH:mm:ss</option>
-              </select>
+              </Select>
               <input
                 aria-label="Import-Zeitzone"
                 value={zone}
@@ -485,7 +458,7 @@ export default function SettingsPanel({
               {Object.keys(map).map((k) => (
                 <label key={k}>
                   {k}
-                  <select
+                  <Select
                     value={map[k]}
                     onChange={(e) => Map({ ...map, [k]: e.target.value })}
                   >
@@ -493,7 +466,7 @@ export default function SettingsPanel({
                     {Object.keys(rows[0]).map((h) => (
                       <option key={h}>{h}</option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               ))}
             </div>
@@ -515,7 +488,7 @@ export default function SettingsPanel({
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

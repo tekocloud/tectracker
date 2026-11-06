@@ -14,7 +14,7 @@ export async function backupBeforeRestore(state: State) {
   if (isTauri()) await invoke("backup_state", { data });
   else {
     localStorage.setItem("tectracker-backup-before-restore", data);
-    download("tectracker-vor-wiederherstellung.json", data);
+    await download("tectracker-vor-wiederherstellung.json", data);
   }
 }
 export function save(state: State) {
@@ -108,15 +108,13 @@ export function parseBackup(raw: string): State {
       throw Error("Ungültige Tagesangaben.");
   return x;
 }
-export function download(
+export async function download(
   name: string,
   text: string,
   type = "application/json",
 ) {
   if (isTauri()) {
-    void invoke("export_file", { name, data: text }).catch((e) =>
-      window.alert("Export fehlgeschlagen: " + e),
-    );
+    await invoke("export_file", { name, data: text });
     return;
   }
   const url = URL.createObjectURL(new Blob([text], { type }));

@@ -1,5 +1,11 @@
+import Select from "./Select";
+import Modal from "./Modal";
+import { useDialogs } from "./Dialogs";
 import { useEffect, useState, useRef } from "react";
 import { version } from "../package.json";
+import PauseEditor from "./PauseEditor";
+import AbsenceSummary from "./AbsenceSummary";
+import GermanDateInput, { germanDate } from "./GermanDateInput";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { DateTime } from "luxon";
@@ -50,6 +56,7 @@ const blank = () => ({
   rateMode: "auto",
 });
 export default function App() {
+  const { confirm, prompt } = useDialogs();
   const [s, S] = useState<State>(initial),
     [ready, R] = useState(false),
     [pid, P] = useState(""),
@@ -59,6 +66,8 @@ export default function App() {
     [draft, D] = useState(blank),
     [details, Details] = useState(false),
     [edit, Edit] = useState<Entry | null>(null),
+    [recordKind, RecordKind] = useState("Arbeitszeit"),
+    [absenceDate, AbsenceDate] = useState(today()),
     [kind, K] = useState<Entity["kind"]>("category"),
     [range, Range] = useState("week"),
     [from, From] = useState(today()),
@@ -86,12 +95,37 @@ export default function App() {
   }, [page, pid]);
   const p = s.profiles.find((x) => x.id === pid) || s.profiles[0],
     date = today(p.zone),
-    now = DateTime.now().setZone(p.zone),
+    now = DateTime.now().setZone("Europe/Berlin"),
     active = s.entries.find((x) => !x.deleted && !x.end),
     running = active?.profileId === p.id ? active : undefined,
     paused = !!running?.pauses.some((x) => !x.end),
     form = running || draft;
   const trayAction = useRef(() => {});
+  useEffect(() => {
+    E("");
+    RecordKind("Arbeitszeit");
+    if (edit)
+      AbsenceDate(
+        DateTime.fromISO(edit.start)
+          .setZone(
+            s.profiles.find((x) => x.id === edit.profileId)?.zone || p.zone,
+          )
+          .toISODate()!,
+      );
+  }, [edit?.id]);
+  function newEntry() {
+    Edit({
+      id: uid(),
+      profileId: p.id,
+      name: "",
+      start: now.minus({ hours: 1 }).toUTC().toISO()!,
+      end: now.toUTC().toISO()!,
+      pauses: [],
+      tags: [],
+      rateMode: "auto",
+      ...resolveRate(s, p, { rateMode: "auto" }),
+    });
+  }
   trayAction.current = () => {
     if (active) {
       const time = new Date().toISOString();
@@ -163,14 +197,14 @@ export default function App() {
       });
     } else D((x) => ({ ...x, ...patch }));
   }
-  function start(template?: Entry) {
+  async function start(template?: Entry) {
+    if (
+      active &&
+      !(await confirm("Laufenden Timer stoppen und einen neuen starten?"))
+    )
+      return;
     attempt(() => {
       const time = new Date().toISOString();
-      if (
-        active &&
-        !confirm("Laufenden Timer stoppen und einen neuen starten?")
-      )
-        return;
       const fields = template
         ? {
             name: template.name,
@@ -270,7 +304,7 @@ export default function App() {
     v: string | undefined,
     change: (v: string) => void,
   ) => (
-    <select
+    <Select
       aria-label={labels[k]}
       value={v || ""}
       onChange={(e) => change(e.target.value)}
@@ -281,10 +315,10 @@ export default function App() {
           {x.name}
         </option>
       ))}
-    </select>
+    </Select>
   );
   const rates = (v: string, change: (v: string) => void) => (
-    <select
+    <Select
       aria-label="Stundensatz"
       value={v}
       onChange={(e) => change(e.target.value)}
@@ -296,7 +330,7 @@ export default function App() {
           {x.name} · {money(x.cents || 0)}/h
         </option>
       ))}
-    </select>
+    </Select>
   );
   let a = from,
     b = to;
@@ -328,6 +362,21 @@ export default function App() {
     ),
     total = report.reduce((a, x) => a + x.net, 0),
     amount = report.reduce((a, x) => a + x.cents, 0);
+  const absences = s.days.filter(
+    (d) =>
+      d.absence && (all || d.profileId === p.id) && d.date >= a && d.date <= b,
+  );
+  async function removeAbsence(day: Day) {
+    if (await confirm(`${day.absence} am ${germanDate(day.date)} entfernen?`))
+      commit({
+        ...s,
+        days: s.days.map((d) =>
+          d.profileId === day.profileId && d.date === day.date
+            ? { ...d, absence: "" }
+            : d,
+        ),
+      });
+  }
   const chartTotals = report.reduce<Record<string, number>>((acc, x) => {
     acc[x.date] =
       (acc[x.date] || 0) + (unit === "hours" ? x.net / 3600 : x.cents / 100);
@@ -366,7 +415,7 @@ export default function App() {
         })),
       ),
       "text/csv;charset=utf-8",
-    );
+    ).catch((e) => E("Export fehlgeschlagen: " + e));
   }
   function entryList(entries: Entry[]) {
     return entries.length ? (
@@ -394,9 +443,14 @@ export default function App() {
                 </small>
               </div>
               <div className="entry-time">
-                {DateTime.fromISO(e.start).setZone(p.zone).toFormat("HH:mm")} –{" "}
+                {DateTime.fromISO(e.start)
+                  .setZone("Europe/Berlin")
+                  .toFormat("HH:mm")}{" "}
+                –{" "}
                 {e.end
-                  ? DateTime.fromISO(e.end).setZone(p.zone).toFormat("HH:mm")
+                  ? DateTime.fromISO(e.end)
+                      .setZone("Europe/Berlin")
+                      .toFormat("HH:mm")
                   : "läuft"}
                 <small>
                   {e.rateCents === undefined
@@ -425,8 +479,8 @@ export default function App() {
               <button
                 title="Löschen"
                 className="icon danger"
-                onClick={() => {
-                  if (confirm("Eintrag löschen?"))
+                onClick={async () => {
+                  if (await confirm("Eintrag löschen?"))
                     commit({
                       ...s,
                       entries: s.entries.map((x) =>
@@ -463,7 +517,7 @@ export default function App() {
         <div className="workspace-label">DEIN ARBEITSBEREICH</div>
         <div className="profile">
           <Briefcase size={18} />
-          <select
+          <Select
             aria-label="Profil"
             value={p.id}
             onChange={(e) => {
@@ -478,7 +532,7 @@ export default function App() {
                   {x.name}
                 </option>
               ))}
-          </select>
+          </Select>
         </div>
         <nav>
           {[
@@ -510,7 +564,7 @@ export default function App() {
           <small>TecTracker · {version}</small>
         </div>
       </aside>
-      <main>
+      <main key={page + pid}>
         <header>
           <div>
             <div className="eyebrow">
@@ -773,7 +827,7 @@ export default function App() {
               </label>
               <label>
                 Heute
-                <select
+                <Select
                   value={day.absence}
                   onChange={(e) => changeDay({ absence: e.target.value })}
                 >
@@ -781,7 +835,7 @@ export default function App() {
                   <option>Urlaub</option>
                   <option>Krankheit</option>
                   <option>Frei</option>
-                </select>
+                </Select>
               </label>
             </section>
           </>
@@ -789,30 +843,28 @@ export default function App() {
         {(page === "Statistik" || page === "Verlauf") && (
           <>
             <section className="card filters">
-              <select value={range} onChange={(e) => Range(e.target.value)}>
+              <Select value={range} onChange={(e) => Range(e.target.value)}>
                 <option value="day">Heute</option>
                 <option value="week">Diese Woche</option>
                 <option value="month">Dieser Monat</option>
                 <option value="year">Dieses Jahr</option>
                 <option value="custom">Eigener Zeitraum</option>
-              </select>
+              </Select>
               {range === "custom" && (
                 <>
-                  <input
+                  <GermanDateInput
                     aria-label="Von"
-                    type="date"
                     value={from}
-                    onChange={(e) => From(e.target.value)}
+                    onValueChange={From}
                   />
-                  <input
+                  <GermanDateInput
                     aria-label="Bis"
-                    type="date"
                     value={to}
-                    onChange={(e) => To(e.target.value)}
+                    onValueChange={To}
                   />
                 </>
               )}
-              <select value={filter} onChange={(e) => F(e.target.value)}>
+              <Select value={filter} onChange={(e) => F(e.target.value)}>
                 <option value="">Alle Zuordnungen</option>
                 {s.entities
                   .filter((x) => all || x.profileId === p.id)
@@ -821,7 +873,7 @@ export default function App() {
                       {labels[x.kind]}: {x.name}
                     </option>
                   ))}
-              </select>
+              </Select>
               <label className="check">
                 <input
                   type="checkbox"
@@ -830,6 +882,10 @@ export default function App() {
                 />
                 Alle Profile
               </label>
+              <button className="secondary" onClick={newEntry}>
+                <Plus size={16} />
+                Zeit nachtragen
+              </button>
               <button className="secondary" onClick={csvExport}>
                 <Download size={16} />
                 CSV exportieren
@@ -872,6 +928,11 @@ export default function App() {
                 accent
               />
             </div>
+            <AbsenceSummary
+              state={s}
+              days={absences}
+              onRemove={removeAbsence}
+            />
             {page === "Statistik" && (
               <>
                 <section className="card padded">
@@ -907,10 +968,10 @@ export default function App() {
                 <section className="card chart">
                   <div className="section-heading">
                     <h2>Arbeitszeit im Verlauf</h2>
-                    <select value={unit} onChange={(e) => U(e.target.value)}>
+                    <Select value={unit} onChange={(e) => U(e.target.value)}>
                       <option value="hours">Stunden</option>
                       <option value="money">Euro</option>
-                    </select>
+                    </Select>
                   </div>
                   <div className="bars">
                     {Array.from(
@@ -937,7 +998,7 @@ export default function App() {
                         <div
                           key={d}
                           className="bar-col"
-                          title={`${d}: ${v.toFixed(2)} ${unit === "hours" ? "h" : "EUR"}`}
+                          title={`${germanDate(d)}: ${v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${unit === "hours" ? "h" : "EUR"}`}
                         >
                           <div
                             className="bar"
@@ -949,7 +1010,7 @@ export default function App() {
                     })}
                   </div>
                   <div className="chart-footer">
-                    {a} — {b} ·{" "}
+                    {germanDate(a)} — {germanDate(b)} ·{" "}
                     {unit === "hours"
                       ? "Nettozeit in Stunden"
                       : "Zeitwert in EUR"}
@@ -958,14 +1019,14 @@ export default function App() {
                 <section className="card">
                   <div className="table-heading">
                     <h2>Verteilung deiner Zeit</h2>
-                    <select value={group} onChange={(e) => G(e.target.value)}>
+                    <Select value={group} onChange={(e) => G(e.target.value)}>
                       <option value="categoryId">Kategorie</option>
                       <option value="projectId">Projekt</option>
                       <option value="customerId">Kunde</option>
                       <option value="tags">Tags</option>
                       <option value="rateId">Stundensatz</option>
                       <option value="date">Tag</option>
-                    </select>
+                    </Select>
                   </div>
                   <table>
                     <thead>
@@ -1002,7 +1063,7 @@ export default function App() {
                           <tr key={id}>
                             <td>
                               <span className="color-dot" />
-                              {group === "date" ? id : name(id)}
+                              {group === "date" ? germanDate(id) : name(id)}
                             </td>
                             <td>
                               <div className="mini-progress">
@@ -1042,7 +1103,7 @@ export default function App() {
                 .map((d) => (
                   <section className="card history-day" key={d}>
                     <div className="day-heading">
-                      <strong>{d}</strong>
+                      <strong>{germanDate(d)}</strong>
                       <span>
                         {duration(
                           report
@@ -1129,24 +1190,24 @@ export default function App() {
                   />
                 )}
                 {(kind === "project" || kind === "customer") && (
-                  <select name="rate">
+                  <Select name="rate">
                     <option value="">Kein eigener Standardsatz</option>
                     {entities("rate").map((x) => (
                       <option key={x.id} value={x.id}>
                         {x.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 {kind === "project" && (
-                  <select name="customer">
+                  <Select name="customer">
                     <option value="">Kein Kunde</option>
                     {entities("customer").map((x) => (
                       <option key={x.id} value={x.id}>
                         {x.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
                 <button className="primary">
                   <Plus size={16} />
@@ -1166,12 +1227,12 @@ export default function App() {
                   <button
                     className="icon"
                     title="Bearbeiten"
-                    onClick={() => {
-                      const n = prompt("Bezeichnung", x.name);
+                    onClick={async () => {
+                      const n = await prompt("Bezeichnung", x.name);
                       if (!n?.trim()) return;
                       let cents = x.cents;
                       if (kind === "rate") {
-                        const v = prompt(
+                        const v = await prompt(
                           "EUR pro Stunde",
                           String((cents || 0) / 100),
                         );
@@ -1185,7 +1246,7 @@ export default function App() {
                       let rateId = x.rateId,
                         customerId = x.customerId;
                       if (kind === "project" || kind === "customer") {
-                        const choice = prompt(
+                        const choice = await prompt(
                           "Standard-Stundensatz: Name oder leer für Vererbung",
                           name(rateId) === "Ohne Zuordnung" ? "" : name(rateId),
                         );
@@ -1199,7 +1260,7 @@ export default function App() {
                         }
                         rateId = r?.id;
                         if (kind === "project") {
-                          const c = prompt(
+                          const c = await prompt(
                             "Kunde: Name oder leer",
                             name(customerId) === "Ohne Zuordnung"
                               ? ""
@@ -1275,159 +1336,204 @@ export default function App() {
         </footer>
       </main>
       {edit && (
-        <div className="modal-backdrop">
+        <Modal
+          title={
+            s.entries.some((x) => x.id === edit.id)
+              ? "Zeiteintrag bearbeiten"
+              : "Zeit nachtragen"
+          }
+          onClose={() => Edit(null)}
+        >
           <form
             className="modal"
             onSubmit={(e) => {
               e.preventDefault();
               attempt(() => {
-                validateEntry(s, edit);
+                if (recordKind !== "Arbeitszeit") {
+                  if (!DateTime.fromISO(absenceDate).isValid)
+                    throw Error("Bitte ein gültiges Abwesenheitsdatum wählen.");
+                  const old = s.days.find(
+                    (d) =>
+                      d.profileId === edit.profileId && d.date === absenceDate,
+                  );
+                  commit({
+                    ...s,
+                    days: [
+                      ...s.days.filter(
+                        (d) =>
+                          !(
+                            d.profileId === edit.profileId &&
+                            d.date === absenceDate
+                          ),
+                      ),
+                      {
+                        profileId: edit.profileId,
+                        date: absenceDate,
+                        actual: old?.actual || 0,
+                        planned: old?.planned || 0,
+                        absence: recordKind,
+                      },
+                    ],
+                  });
+                  Edit(null);
+                  return;
+                }
+                const updated = {
+                  ...edit,
+                  pauses: [...edit.pauses].sort(
+                    (a, b) => Date.parse(a.start) - Date.parse(b.start),
+                  ),
+                };
+                validateEntry(s, updated);
                 commit({
                   ...s,
                   entries: s.entries.some((x) => x.id === edit.id)
-                    ? s.entries.map((x) => (x.id === edit.id ? edit : x))
-                    : [...s.entries, edit],
+                    ? s.entries.map((x) => (x.id === edit.id ? updated : x))
+                    : [...s.entries, updated],
                 });
                 Edit(null);
               });
             }}
           >
-            <h2>Zeiteintrag bearbeiten</h2>
-            <label>
-              Beschreibung
-              <input
-                value={edit.name}
-                onChange={(e) => Edit({ ...edit, name: e.target.value })}
-              />
-            </label>
-            {(["start", "end"] as const).map((k) => (
-              <label key={k}>
-                {k === "start" ? "Beginn" : "Ende"}
-                <input
-                  type="datetime-local"
-                  step="1"
-                  required={k === "start" || !!edit.end}
-                  value={
-                    edit[k]
-                      ? DateTime.fromISO(edit[k]!)
-                          .setZone(p.zone)
-                          .toFormat("yyyy-MM-dd'T'HH:mm:ss")
-                      : ""
-                  }
-                  onChange={(e) => {
-                    const d = DateTime.fromISO(e.target.value, {
-                      zone: p.zone,
-                    });
-                    if (d.isValid) Edit({ ...edit, [k]: d.toUTC().toISO()! });
-                  }}
-                />
-              </label>
-            ))}
-            {select("category", edit.categoryId, (v) =>
-              Edit({ ...edit, categoryId: v }),
-            )}
-            {select("project", edit.projectId, (v) => {
-              const e = {
-                ...edit,
-                projectId: v,
-                customerId:
-                  s.entities.find((x) => x.id === v)?.customerId || "",
-              };
-              Edit({
-                ...e,
-                ...(e.rateMode === "auto" ? resolveRate(s, p, e) : {}),
-              });
-            })}
-            {select("customer", edit.customerId, (v) => {
-              const e = { ...edit, customerId: v };
-              Edit({
-                ...e,
-                ...(e.rateMode === "auto" ? resolveRate(s, p, e) : {}),
-              });
-            })}
-            {rates(edit.rateMode, (v) =>
-              Edit({
-                ...edit,
-                rateMode: v,
-                ...resolveRate(s, p, { ...edit, rateMode: v }),
-              }),
-            )}
-            <div className="tag-options">
-              {entities("tag").map((t) => (
-                <label key={t.id}>
-                  <input
-                    type="checkbox"
-                    checked={edit.tags.includes(t.id)}
-                    onChange={(e) =>
-                      Edit({
-                        ...edit,
-                        tags: e.target.checked
-                          ? [...edit.tags, t.id]
-                          : edit.tags.filter((x) => x !== t.id),
-                      })
-                    }
-                  />
-                  {t.name}
-                </label>
-              ))}
-            </div>
-            <small>
-              Gespeicherter Satz:{" "}
-              {edit.rateCents === undefined
-                ? "ohne"
-                : money(edit.rateCents) + "/h"}
-              . Satzänderungen gelten für den ganzen Eintrag.
-            </small>
-            {edit.pauses.length > 0 && (
-              <div className="pause-editor">
-                <h3>Timerpausen</h3>
-                {edit.pauses.map((pause, i) => (
-                  <div key={i} className="settings-row">
-                    {(["start", "end"] as const).map((k) => (
-                      <label key={k}>
-                        {k === "start" ? "Beginn" : "Ende"}
-                        <input
-                          type="datetime-local"
-                          step="1"
-                          value={
-                            pause[k]
-                              ? DateTime.fromISO(pause[k]!)
-                                  .setZone(p.zone)
-                                  .toFormat("yyyy-MM-dd\u0027T\u0027HH:mm:ss")
-                              : ""
-                          }
-                          onChange={(ev) => {
-                            const d = DateTime.fromISO(ev.target.value, {
-                              zone: p.zone,
-                            });
-                            if (d.isValid)
-                              Edit({
-                                ...edit,
-                                pauses: edit.pauses.map((v, j) =>
-                                  j === i
-                                    ? { ...v, [k]: d.toUTC().toISO()! }
-                                    : v,
-                                ),
-                              });
-                          }}
-                        />
-                      </label>
-                    ))}
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() =>
-                        Edit({
-                          ...edit,
-                          pauses: edit.pauses.filter((_, j) => j !== i),
-                        })
-                      }
-                    >
-                      Entfernen
-                    </button>
-                  </div>
-                ))}
+            <h2 id="edit-heading">
+              {s.entries.some((x) => x.id === edit.id)
+                ? "Zeiteintrag bearbeiten"
+                : "Zeit nachtragen"}
+            </h2>
+            {error && (
+              <div className="alert" role="alert">
+                {error}
               </div>
+            )}
+            {!s.entries.some((x) => x.id === edit.id) && (
+              <label>
+                Eintragsart
+                <Select
+                  value={recordKind}
+                  onChange={(e) => {
+                    RecordKind(e.target.value);
+                    E("");
+                  }}
+                >
+                  <option>Arbeitszeit</option>
+                  <option>Urlaub</option>
+                  <option>Krankheit</option>
+                  <option>Frei</option>
+                </Select>
+              </label>
+            )}
+            {recordKind !== "Arbeitszeit" ? (
+              <>
+                <label>
+                  Datum der Abwesenheit
+                  <GermanDateInput
+                    required
+                    value={absenceDate}
+                    onValueChange={AbsenceDate}
+                  />
+                </label>
+                <p className="muted">
+                  {recordKind} wird im Verlauf und in der Statistik angezeigt.
+                  Die Sollzeit dieses Tages entfällt; es wird keine Arbeitszeit
+                  hinzugefügt.
+                </p>
+              </>
+            ) : (
+              <>
+                <label>
+                  Beschreibung
+                  <input
+                    value={edit.name}
+                    onChange={(e) => Edit({ ...edit, name: e.target.value })}
+                  />
+                </label>
+                {(["start", "end"] as const).map((k) => (
+                  <label key={k}>
+                    {k === "start" ? "Beginn" : "Ende"}
+                    <GermanDateInput
+                      dateTime
+                      required={k === "start" || !!edit.end}
+                      value={
+                        edit[k]
+                          ? DateTime.fromISO(edit[k]!)
+                              .setZone("Europe/Berlin")
+                              .toFormat("yyyy-MM-dd'T'HH:mm:ss")
+                          : ""
+                      }
+                      onValueChange={(value) => {
+                        const d = DateTime.fromISO(value, {
+                          zone: "Europe/Berlin",
+                        });
+                        if (d.isValid)
+                          Edit({ ...edit, [k]: d.toUTC().toISO()! });
+                      }}
+                    />
+                  </label>
+                ))}
+                <PauseEditor
+                  entry={edit}
+                  zone={
+                    s.profiles.find((x) => x.id === edit.profileId)?.zone ||
+                    p.zone
+                  }
+                  onChange={(pauses) => Edit({ ...edit, pauses })}
+                />
+                {select("category", edit.categoryId, (v) =>
+                  Edit({ ...edit, categoryId: v }),
+                )}
+                {select("project", edit.projectId, (v) => {
+                  const e = {
+                    ...edit,
+                    projectId: v,
+                    customerId:
+                      s.entities.find((x) => x.id === v)?.customerId || "",
+                  };
+                  Edit({
+                    ...e,
+                    ...(e.rateMode === "auto" ? resolveRate(s, p, e) : {}),
+                  });
+                })}
+                {select("customer", edit.customerId, (v) => {
+                  const e = { ...edit, customerId: v };
+                  Edit({
+                    ...e,
+                    ...(e.rateMode === "auto" ? resolveRate(s, p, e) : {}),
+                  });
+                })}
+                {rates(edit.rateMode, (v) =>
+                  Edit({
+                    ...edit,
+                    rateMode: v,
+                    ...resolveRate(s, p, { ...edit, rateMode: v }),
+                  }),
+                )}
+                <div className="tag-options">
+                  {entities("tag").map((t) => (
+                    <label key={t.id}>
+                      <input
+                        type="checkbox"
+                        checked={edit.tags.includes(t.id)}
+                        onChange={(e) =>
+                          Edit({
+                            ...edit,
+                            tags: e.target.checked
+                              ? [...edit.tags, t.id]
+                              : edit.tags.filter((x) => x !== t.id),
+                          })
+                        }
+                      />
+                      {t.name}
+                    </label>
+                  ))}
+                </div>
+                <small>
+                  Gespeicherter Satz:{" "}
+                  {edit.rateCents === undefined
+                    ? "ohne"
+                    : money(edit.rateCents) + "/h"}
+                  . Satzänderungen gelten für den ganzen Eintrag.
+                </small>
+              </>
             )}
             <div className="modal-actions">
               <button
@@ -1440,7 +1546,7 @@ export default function App() {
               <button className="primary">Speichern</button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -76,6 +76,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/download-artifact@v4
         with:
           pattern: tectracker-*
@@ -111,13 +115,7 @@ jobs:
             fi
             release_exists=true
           fi
-          existing_sha=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha 2>/dev/null || true)
-          if [[ -z "$existing_sha" ]]; then
-            gh api "repos/$GH_REPO/git/refs" --method POST -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$RELEASE_SHA" > /dev/null
-          elif [[ "$existing_sha" != "$RELEASE_SHA" ]]; then
-            echo "Tag $RELEASE_TAG already points to another commit. Increase the version instead of moving an existing tag." >&2
-            exit 1
-          fi
+          node scripts/ensure-release-tag.mjs
           if [[ "$release_exists" == 'false' ]]; then
             flags=()
             if [[ "$RELEASE_TAG" == *-* ]]; then flags+=(--prerelease); fi

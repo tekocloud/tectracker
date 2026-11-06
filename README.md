@@ -57,6 +57,12 @@ Das automatische `GITHUB_TOKEN` erhält nur im Release-Job Schreibrechte; ein zu
 5. Verlauf und Statistik nach Zeitraum und Zuordnung filtern; CSV exportiert diese Auswahl. Sollzeit bleibt bei Zuordnungsfiltern die vollständige Profil-Sollzeit.
 6. Vollständige JSON-Sicherungen regelmäßig extern aufbewahren. CSV ist ein Austauschformat, keine vollständige Sicherung.
 
+Unter **Zeit nachtragen** gibt es die Eintragsarten Arbeitszeit, Urlaub, Krankheit und Frei. Abwesenheiten brauchen nur ein Datum, erscheinen im Verlauf und in der Statistik und setzen das Tagesziel auf null. Die frühere Abwesenheitseingabe in den Einstellungen ist entfernt; dort erfasste Altdaten bleiben erhalten und sichtbar. Abwesenheiten werden als Tage ausgewiesen und nicht als geleistete Arbeitszeit oder Geldwert gezählt.
+
+Datumsanzeigen und Eingabefelder verwenden unabhängig von der System- oder Browsersprache `TT.MM.JJJJ`, Uhrzeiten das 24-Stunden-Format. Datums-/Zeitfelder können als `TT.MM.JJJJ HH:mm` oder mit Sekunden ausgefüllt werden. Die Anzeige und Eingabe von Zeitpunkten erfolgt in deutscher Ortszeit (Europe/Berlin, einschließlich Sommerzeit). Gespeicherte Zeitpunkte bleiben UTC; CSV- und JSON-Austauschformate bleiben maschinenlesbar.
+
+Im Formular für neue und bestehende Arbeitszeiten lassen sich mit **Pause hinzufügen** mehrere Pausen mit Beginn und Ende nachtragen. Pausen können bearbeitet oder entfernt werden; ihre Summe wird angezeigt. Beim Speichern werden sie chronologisch sortiert. Überschneidende Pausen, Zeiten außerhalb des Eintrags und Pausen ohne positive Dauer werden abgelehnt. Die Nettozeit und ihr Geldwert berücksichtigen alle Pausen; bereits erfasste Timerpausen bleiben erhalten und werden durch den zusätzlichen Tagesabzug nicht doppelt gezählt.
+
 ## Berechnung und Architektur
 
 UTC-Zeitpunkte werden für Tagesauswertungen anhand der Profilzeitzone aufgeteilt. Nettozeiten, Pausenverteilung und Geldwerte stammen aus `src/core.ts`. Preise sind ganzzahlige Centbeträge; die Berechnung verwendet ganzzahlige Mikrosekunden und BigInt statt Gleitkomma-Geldberechnung. Jeder Tagesanteil wird auf Cent gerundet. Einträge speichern ihren Preis, sodass spätere Änderungen am Stammsatz historische Werte nicht verändern.

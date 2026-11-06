@@ -21,6 +21,36 @@ const entry = (profileId: string, patch: Partial<Entry> = {}): Entry => ({
   ...patch,
 });
 describe("Arbeitszeit", () => {
+  it("zieht mehrere nachgetragene Pausen von Zeit und Wert ab", () => {
+    const s = initial(),
+      id = s.profiles[0].id;
+    const e = entry(id, {
+      start: "2026-01-05T08:00:00Z",
+      end: "2026-01-05T16:00:00Z",
+      pauses: [
+        { start: "2026-01-05T11:00:00Z", end: "2026-01-05T11:30:00Z" },
+        { start: "2026-01-05T14:00:00Z", end: "2026-01-05T14:15:00Z" },
+      ],
+    });
+    s.entries = [e];
+    expect(() => validateEntry(s, e)).not.toThrow();
+    expect(slices(s)[0].net).toBe(26100);
+    expect(slices(s)[0].cents).toBe(58000);
+  });
+  it("lehnt überlappende, negative, ungültige und außerhalb liegende Pausen ab", () => {
+    const s = initial(),
+      id = s.profiles[0].id;
+    for (const pauses of [
+      [
+        { start: "2026-01-05T09:15:00Z", end: "2026-01-05T09:45:00Z" },
+        { start: "2026-01-05T09:30:00Z", end: "2026-01-05T10:00:00Z" },
+      ],
+      [{ start: "2026-01-05T08:00:00Z", end: "2026-01-05T09:15:00Z" }],
+      [{ start: "2026-01-05T09:15:00Z", end: "2026-01-05T09:15:00Z" }],
+      [{ start: "2026-01-05T09:15:00Z", end: "invalid" }],
+    ])
+      expect(() => validateEntry(s, entry(id, { pauses }))).toThrow("Pausen");
+  });
   it("verteilt 37 Stunden auf fünf Tage", () => {
     const s = initial();
     expect(target(s.profiles[0], "2026-01-05", [])).toBe(26640);
