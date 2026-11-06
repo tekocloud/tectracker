@@ -1,0 +1,16 @@
+[package]
+name = "tectracker"
+version = "0.1.0"
+description = "Lokale Zeiterfassung"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde_json = "1"
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+
