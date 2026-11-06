@@ -22,7 +22,8 @@ Der Container enthält einen Healthcheck und kann mit schreibgeschütztem Dateis
 
 ### Automatisches Image aus GitHub Actions
 
-Der Workflow `.github/workflows/web-image.yml` testet die App und veröffentlicht
+Der gemeinsame Workflow `.github/workflows/build.yml` baut Windows, macOS und
+das Docker-Image. Der Docker-Job testet die App und veröffentlicht
 bei einem Push auf den Hauptbranch das Web-Image in der GitHub Container Registry:
 
 ```text
@@ -33,8 +34,10 @@ Ein gemeinsames Image unterstützt **Linux amd64 und arm64**. Jeder Lauf veröff
 zusätzlich einen `sha-<vollständige-Commit-ID>`-Tag, mit dem sich ein bestimmter
 Stand gezielt bereitstellen lässt.
 `latest` folgt ausschließlich dem Hauptbranch. Der Workflow lässt sich auch manuell
-unter **Actions → Web Docker image → Run workflow** auf dem Hauptbranch starten.
-Builds von anderen Branches veröffentlichen kein Image.
+unter **Actions → Desktop and Docker builds → Run workflow** auf dem Hauptbranch starten.
+Builds von anderen Branches veröffentlichen kein Image. Der Docker-Job läuft nach
+der Versionsprüfung parallel zu den Desktop-Builds; ein macOS-Runner-Ausfall
+blockiert die Veröffentlichung des Docker-Images nicht.
 
 Zum Hochladen verwendet die Action das vorhandene `GITHUB_TOKEN` mit
 `packages: write`; ein zusätzliches Secret ist nicht erforderlich. Das Image wird
