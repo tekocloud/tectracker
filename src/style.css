@@ -426,6 +426,23 @@ header p {
   justify-content: space-between;
   font-size: 10px;
 }
+.week-range {
+  font-weight: 400;
+  margin-left: 12px;
+  font-size: 10px;
+}
+.weekly-progress {
+  margin-top: -14px;
+}
+.weekly-progress > small > span:first-child {
+  font-variant-numeric: tabular-nums;
+}
+.weekly-progress > div:first-child > strong {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
 .section-heading {
   display: flex;
   align-items: center;

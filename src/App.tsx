@@ -280,6 +280,31 @@ export default function App() {
       planned: 0,
       absence: "",
     };
+  const weekStart = now.startOf("week"),
+    weekEnd = now.endOf("week");
+  const weekNet = rows
+    .filter(
+      (row) =>
+        row.entry.profileId === p.id &&
+        row.date >= weekStart.toISODate()! &&
+        row.date <= weekEnd.toISODate()!,
+    )
+    .reduce((sum, row) => sum + row.net, 0);
+  const weekGoal = Array.from({ length: 7 }, (_, i) =>
+    weekStart.plus({ days: i }).toISODate()!,
+  ).reduce(
+    (sum, date) =>
+      sum +
+      (s.days.some(
+        (day) => day.profileId === p.id && day.date === date && day.absence,
+      )
+        ? 0
+        : scheduledTarget(p, date)),
+    0,
+  );
+  const weekPercent = weekGoal
+    ? Math.min(100, Math.round((weekNet / weekGoal) * 100))
+    : 0;
   function changeDay(patch: Partial<Day>) {
     const d = { ...day, ...patch };
     if (d.actual > daily.reduce((a, x) => a + x.gross, 0)) {
@@ -761,6 +786,48 @@ export default function App() {
                     .plus({ seconds: Math.max(0, goal - net) + day.planned })
                     .toFormat("HH:mm")}{" "}
                   Uhr
+                </span>
+              </small>
+            </section>
+            <section
+              className="card progress-card weekly-progress"
+              aria-label="Wochenfortschritt"
+            >
+              <div>
+                <strong>
+                  Dein Wochenfortschritt{" "}
+                  <small className="week-range">
+                    {germanDate(weekStart.toISODate()!)} –{" "}
+                    {germanDate(weekEnd.toISODate()!)}
+                  </small>
+                </strong>
+                <span>{weekPercent}%</span>
+              </div>
+              <div
+                className="progress"
+                role="progressbar"
+                aria-label="Wochenziel"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={weekPercent}
+                aria-valuetext={`${duration(weekNet)} von ${duration(weekGoal)} erfasst`}
+              >
+                <i
+                  style={{
+                    width: `${weekGoal ? Math.min(100, (weekNet / weekGoal) * 100) : 0}%`,
+                  }}
+                />
+              </div>
+              <small>
+                <span>
+                  {duration(weekNet)} von {duration(weekGoal)} Wochen-Sollzeit
+                </span>
+                <span>
+                  {!weekGoal
+                    ? "Kein Wochen-Soll vorgesehen"
+                    : weekNet >= weekGoal
+                      ? `Wochenziel erreicht${weekNet > weekGoal ? " · " + duration(weekNet - weekGoal) + " darüber" : ""}`
+                      : duration(weekGoal - weekNet) + " bis zum Wochenziel"}
                 </span>
               </small>
             </section>

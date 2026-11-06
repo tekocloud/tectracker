@@ -191,7 +191,7 @@ test("Abwesenheiten stehen zwischen Arbeitszeiten am passenden Datum und reduzie
   await page.screenshot({
     path: "test-results/verlauf-abwesenheiten.png",
     fullPage: true,
-    animations: 'disabled',
+    animations: "disabled",
   });
 });
 test("geplanter Urlaub reduziert die volle Wochen-Sollzeit ohne zukünftige Minusstunden", async ({
@@ -221,4 +221,38 @@ test("Einstellungen enthalten keine Abwesenheitseingabe; Altdaten bleiben sichtb
   await page.getByRole("button", { name: "Statistik", exact: true }).click();
   await expect(page.locator(".absence-row")).toContainText("05.11.2026");
   await expect(page.locator(".metrics")).toContainText("29:36:00");
+});
+test("Wochenfortschritt berücksichtigt Nettozeit, Abwesenheiten und das ausgewählte Profil", async ({
+  page,
+}) => {
+  await seed(page, true, true);
+  const week = page.getByRole("region", { name: "Wochenfortschritt" });
+  await expect(week).toContainText("8:00:00 von 29:36:00 Wochen-Sollzeit");
+  await expect(week).toContainText("21:36:00 bis zum Wochenziel");
+  await expect(week.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "27",
+  );
+  await expect(week).toContainText("02.11.2026 – 08.11.2026");
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem("tectracker")!);
+    s.entries[0].pauses = [
+      { start: "2026-11-06T11:00:00Z", end: "2026-11-06T12:00:00Z" },
+    ];
+    s.profiles.push({
+      id: "other",
+      name: "Nebenjob",
+      zone: "Europe/Berlin",
+      plans: [{ from: "2026-01-01", seconds: 36000, days: [1, 2, 3, 4, 5] }],
+    });
+    localStorage.setItem("tectracker", JSON.stringify(s));
+  });
+  await page.reload();
+  await expect(week).toContainText("7:00:00 von 29:36:00");
+  await page.getByLabel("Profil", { exact: true }).selectOption("other");
+  await expect(week).toContainText("0:00:00 von 10:00:00");
+  await expect(week.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "0",
+  );
 });
