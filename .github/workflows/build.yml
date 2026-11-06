@@ -12,7 +12,26 @@ concurrency:
   group: desktop-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  prepare:
+    name: Determine release version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate versions and determine release
+        id: version
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/release-version.mjs
+
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -30,21 +49,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Check release version
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const config = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
-          const cargo = fs.readFileSync('src-tauri/Cargo.toml', 'utf8').match(/^version\s*=\s*"([^"]+)"/m)?.[1];
-          if (process.env.RELEASE_TAG !== `v${pkg.version}` || config.version !== pkg.version || cargo !== pkg.version) {
-            throw new Error('Release-Tag und Versionen in package.json, Cargo.toml und tauri.conf.json müssen übereinstimmen.');
-          }
-          NODE
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -63,9 +67,12 @@ jobs:
 
   release:
     name: Publish installers to GitHub Release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [prepare, build]
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    concurrency:
+      group: publish-desktop-release
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -92,18 +99,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          release_exists=false
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > release-status.txt 2>/dev/null; then
             if [[ "$(cat release-status.txt)" != 'true' ]]; then
-              echo 'This release is already published. Use a new version tag instead of replacing published installers.' >&2
-              exit 1
+              echo "Release $RELEASE_TAG is already published and will remain unchanged. Increase the app version to publish another release." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
             fi
-          else
+            release_exists=true
+          fi
+          existing_sha=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha 2>/dev/null || true)
+          if [[ -z "$existing_sha" ]]; then
+            gh api "repos/$GH_REPO/git/refs" --method POST -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$RELEASE_SHA" > /dev/null
+          elif [[ "$existing_sha" != "$RELEASE_SHA" ]]; then
+            echo "Tag $RELEASE_TAG already points to another commit. Increase the version instead of moving an existing tag." >&2
+            exit 1
+          fi
+          if [[ "$release_exists" == 'false' ]]; then
             flags=()
             if [[ "$RELEASE_TAG" == *-* ]]; then flags+=(--prerelease); fi
             gh release create "$RELEASE_TAG" --verify-tag --draft --title "TecTracker $RELEASE_TAG" --generate-notes "${flags[@]}"
           fi
+          tag_sha=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)
+          if [[ "$tag_sha" != "$RELEASE_SHA" ]]; then
+            echo 'The draft release tag does not match this build commit. Refusing to upload mismatched installers.' >&2
+            exit 1
+          fi
           gh release upload "$RELEASE_TAG" release-assets/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false
+          echo "Published: https://github.com/$GH_REPO/releases/tag/$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"

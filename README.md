@@ -28,21 +28,17 @@ Installer liegen unter `src-tauri/target/release/bundle`. Die GitHub-Actions-Kon
 
 ## GitHub Releases
 
-Ein gepushter Versions-Tag veröffentlicht die Installer automatisch unter [Releases](https://github.com/tekocloud/tectracker/releases). Für die aktuelle Version **0.1.1**:
+Ein Push auf den Hauptbranch (aktuell `master`) veröffentlicht die Installer automatisch unter [Releases](https://github.com/tekocloud/tectracker/releases). Der Workflow liest die Version aus der App und erstellt den Versions-Tag selbst. Für die aktuelle Version **0.1.1** genügt nach dem Commit:
 
 ```sh
-git add .github/workflows/build.yml package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json src/App.tsx tsconfig.json README.md
-git commit -m "Publish desktop installers as GitHub releases; bump to 0.1.1"
 git push origin HEAD
-git tag v0.1.1
-git push origin v0.1.1
 ```
 
-Der Tag muss zur Version in `package.json`, `src-tauri/Cargo.toml` und `src-tauri/tauri.conf.json` passen. Die Oberfläche übernimmt ihre Version direkt aus `package.json`.
+Die Versionen in `package.json`, `src-tauri/Cargo.toml` und `src-tauri/tauri.conf.json` müssen übereinstimmen. Die Oberfläche übernimmt ihre Version direkt aus `package.json`. Explizite Versions-Tags bleiben möglich und müssen zu dieser Version passen.
 
-Erst wenn alle drei Plattform-Builds erfolgreich sind, erstellt der Release-Job einen Entwurf, lädt die `.exe`-, `.msi`- und `.dmg`-Installer hoch und veröffentlicht das Release. Tags mit einem Suffix wie `v0.1.2-beta.1` werden als Vorabversion markiert. Normale Branch-Pushes erzeugen weiterhin Actions-Artefakte. Ein manueller Lauf über „Run workflow“ veröffentlicht ebenfalls, wenn ein Versions-Tag als Referenz ausgewählt ist.
+Erst wenn alle drei Plattform-Builds erfolgreich sind, erstellt der Release-Job den Tag am gebauten Commit und einen Release-Entwurf, lädt die `.exe`-, `.msi`- und `.dmg`-Installer hoch und veröffentlicht das Release. Versionen mit einem Suffix wie `0.1.2-beta.1` werden als Vorabversion markiert. Andere Branches erzeugen ausschließlich Actions-Artefakte. Ein manueller Lauf über „Run workflow“ veröffentlicht ebenfalls, wenn der Hauptbranch oder ein passender Versions-Tag als Referenz ausgewählt ist.
 
-Das automatische `GITHUB_TOKEN` erhält nur im Release-Job Schreibrechte; ein zusätzliches Token ist nicht nötig. Bereits veröffentlichte Releases werden bei erneuten Läufen nicht überschrieben. Ein fehlgeschlagener Upload kann über einen erneuten Lauf fortgesetzt werden, solange das Release noch ein Entwurf ist. Falls Repository- oder Organisationsregeln die Schreibrechte einschränken, müssen diese den Release-Job zulassen.
+Das automatische `GITHUB_TOKEN` erhält nur im Release-Job Schreibrechte; ein zusätzliches Token ist nicht nötig. Bereits veröffentlichte Releases werden bei erneuten Läufen unverändert beibehalten; der Schritt endet erfolgreich mit einem Hinweis in der Laufzusammenfassung. Für ein neues Release die App-Version erhöhen und die zugehörigen Lockdateien aktualisieren. Ein fehlgeschlagener Upload kann über einen erneuten Lauf desselben Commits fortgesetzt werden, solange das Release noch ein Entwurf ist. Existierende Tags werden nicht verschoben. Falls Repository- oder Organisationsregeln die Schreibrechte einschränken, müssen diese den Release-Job zulassen.
 
 ## Bedienung
 
