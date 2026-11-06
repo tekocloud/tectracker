@@ -15,7 +15,7 @@ export function releaseVersion({
   }
   if (desktopVersion !== version || cargoVersion !== version) {
     throw new Error(
-      "Versionen in package.json, Cargo.toml und tauri.conf.json müssen übereinstimmen.",
+      `Versionskonflikt: package.json=${version}, Cargo.toml=${cargoVersion ?? "nicht gefunden"}, tauri.conf.json=${desktopVersion ?? "nicht gefunden"}. Mit npm run version:set synchronisieren.`,
     );
   }
   const tag = `v${version}`;

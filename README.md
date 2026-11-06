@@ -28,13 +28,21 @@ Installer liegen unter `src-tauri/target/release/bundle`. Die GitHub-Actions-Kon
 
 ## GitHub Releases
 
-Ein Push auf den Hauptbranch (aktuell `master`) veröffentlicht die Installer automatisch unter [Releases](https://github.com/tekocloud/tectracker/releases). Der Workflow liest die Version aus der App und erstellt den Versions-Tag selbst. Für die aktuelle Version **0.1.1** genügt nach dem Commit:
+Ein Push auf den Hauptbranch (aktuell `master`) veröffentlicht die Installer automatisch unter [Releases](https://github.com/tekocloud/tectracker/releases). Der Workflow liest die Version aus der App und erstellt den Versions-Tag selbst. Für die aktuelle Version **0.1.2** genügt nach dem Commit:
 
 ```sh
 git push origin HEAD
 ```
 
 Die Versionen in `package.json`, `src-tauri/Cargo.toml` und `src-tauri/tauri.conf.json` müssen übereinstimmen. Die Oberfläche übernimmt ihre Version direkt aus `package.json`. Explizite Versions-Tags bleiben möglich und müssen zu dieser Version passen.
+
+Für künftige Versionsänderungen diesen Befehl verwenden, damit alle drei Manifeste und beide Lockdateien gemeinsam aktualisiert werden:
+
+```sh
+npm run version:set -- 0.1.3
+```
+
+Ohne Versionsargument gleicht `npm run version:set` die anderen Dateien auf die bereits in `package.json` eingetragene Version ab. Anschließend alle geänderten Versionsdateien zusammen committen und pushen. Abhängigkeiten werden dabei nicht aktualisiert.
 
 Erst wenn alle drei Plattform-Builds erfolgreich sind, erstellt der Release-Job den Tag am gebauten Commit und einen Release-Entwurf, lädt die `.exe`-, `.msi`- und `.dmg`-Installer hoch und veröffentlicht das Release. Versionen mit einem Suffix wie `0.1.2-beta.1` werden als Vorabversion markiert. Andere Branches erzeugen ausschließlich Actions-Artefakte. Ein manueller Lauf über „Run workflow“ veröffentlicht ebenfalls, wenn der Hauptbranch oder ein passender Versions-Tag als Referenz ausgewählt ist.
 
