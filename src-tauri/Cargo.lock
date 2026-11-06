@@ -3733,7 +3733,7 @@ dependencies = [
 
 [[package]]
 name = "tectracker"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "rusqlite",
  "serde_json",

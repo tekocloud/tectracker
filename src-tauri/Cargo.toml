@@ -1,6 +1,6 @@
 [package]
 name = "tectracker"
-version = "0.2.5"
+version = "0.2.6"
 description = "Lokale Zeiterfassung"
 edition = "2021"
 
