@@ -93,6 +93,32 @@ async function seed(page: Page, withEntry = false, legacyAbsence = false) {
     page.getByRole("heading", { name: "Zeiterfassung", exact: true }),
   ).toBeVisible();
 }
+
+test("Ziffern bleiben beim Tippen und Tab-Wechsel unverändert", async ({ page }) => {
+  await seed(page, true);
+  await page.getByTitle("Bearbeiten", { exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Ende Tag", { exact: true }).focus();
+  for (const [name, value] of [["Tag", "16"], ["Monat", "12"], ["Jahr", "2026"], ["Stunde", "21"], ["Minute", "51"], ["Sekunde", "42"]]) {
+    const field = dialog.getByLabel(`Ende ${name}`, { exact: true });
+    await expect(field).toBeFocused();
+    await field.pressSequentially(value[0]);
+    await expect(field).toHaveValue(value[0]);
+    await field.pressSequentially(value.slice(1));
+    await expect(field).toHaveValue(value);
+    await field.press("Tab");
+  }
+  const minute = dialog.getByLabel("Ende Minute", { exact: true });
+  await minute.focus();
+  await minute.pressSequentially("5");
+  await expect(minute).toHaveValue("5");
+  await minute.press("Tab");
+  await expect(minute).toHaveValue("05");
+  await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const end = await page.evaluate(() => JSON.parse(localStorage.getItem("tectracker")!).entries[0].end);
+  expect(end).toBe("2026-12-16T20:05:42.000Z");
+});
 test("mehrere Pausen hinzufügen, validieren, speichern und bearbeiten", async ({
   page,
 }) => {

@@ -31,7 +31,15 @@ export default function DateTimeFields({
 }) {
   const [values, setValues] = useState(() => parts(value));
   const first = useRef<HTMLInputElement>(null);
-  useEffect(() => setValues(parts(value)), [value]);
+  const emittedValue = useRef(value);
+  useEffect(() => {
+    // Keep the local draft while the parent echoes our own change back.
+    // Otherwise typing the first digit would immediately pad the active field.
+    if (value !== emittedValue.current) {
+      emittedValue.current = value;
+      setValues(parts(value));
+    }
+  }, [value]);
   const normalized = values.map((v, i) => v.padStart(fields[i][2], "0"));
   const parsed = values.every(Boolean)
     ? parseGermanInput(
@@ -66,6 +74,11 @@ export default function DateTimeFields({
               required={required || values.some(Boolean)}
               value={values[index]}
               onFocus={(event) => event.currentTarget.select()}
+              onBlur={() => {
+                setValues(current => current.map((part, i) =>
+                  i === index && part ? part.padStart(length, "0") : part,
+                ));
+              }}
               onChange={(event) => {
                 const next = [...values];
                 next[index] = event.target.value;
@@ -79,7 +92,11 @@ export default function DateTimeFields({
                       true,
                     )
                   : null;
-                if (date) onValueChange(date.toFormat("yyyy-MM-dd'T'HH:mm:ss"));
+                if (date) {
+                  const nextValue = date.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+                  emittedValue.current = nextValue;
+                  onValueChange(nextValue);
+                }
               }}
             />
           </label>
