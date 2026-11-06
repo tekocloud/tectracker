@@ -23,11 +23,11 @@ export async function ensureReleaseTag({
     "Content-Type": "application/json",
     "X-GitHub-Api-Version": "2022-11-28",
   };
-  const response = await fetchImpl(
-    `${base}/commits/${encodeURIComponent(tag)}`,
+  const reference = await fetchImpl(
+    `${base}/git/ref/tags/${encodeURIComponent(tag)}`,
     { headers },
   );
-  if (response.status === 404) {
+  if (reference.status === 404) {
     const created = await fetchImpl(`${base}/git/refs`, {
       method: "POST",
       headers,
@@ -44,6 +44,15 @@ export async function ensureReleaseTag({
       );
     return { created: true, sha };
   }
+  if (!reference.ok)
+    throw Error(
+      `Tag ${tag} konnte nicht geprüft werden (HTTP ${reference.status}). GitHub-Zugriff prüfen.`,
+    );
+  // Resolve the fully qualified tag to a commit, including annotated tags.
+  const response = await fetchImpl(
+    `${base}/commits/${encodeURIComponent(`refs/tags/${tag}`)}`,
+    { headers },
+  );
   if (!response.ok)
     throw Error(
       `Tag ${tag} konnte nicht geprüft werden (HTTP ${response.status}). GitHub-Zugriff prüfen.`,

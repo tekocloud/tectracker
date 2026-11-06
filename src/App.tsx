@@ -4,7 +4,7 @@ import { useDialogs } from "./Dialogs";
 import { useEffect, useState, useRef } from "react";
 import { version } from "../package.json";
 import PauseEditor from "./PauseEditor";
-import AbsenceSummary from "./AbsenceSummary";
+import AbsenceSummary, { AbsenceTimelineRow } from "./AbsenceSummary";
 import GermanDateInput, { germanDate } from "./GermanDateInput";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -31,6 +31,7 @@ import {
   duration,
   money,
   target,
+  scheduledTarget,
   slices,
   resolveRate,
   validateEntry,
@@ -383,14 +384,27 @@ export default function App() {
     return acc;
   }, {});
   const chartMax = Math.max(1, ...Object.values(chartTotals));
-  let reportGoal = 0;
+  let reportGoal = 0,
+    regularGoal = 0,
+    elapsedGoal = 0;
   for (
     let d = DateTime.fromISO(a), end = DateTime.fromISO(b);
     d <= end;
     d = d.plus({ days: 1 })
   )
-    for (const profile of s.profiles.filter((x) => all || x.id === p.id))
-      reportGoal += target(profile, d.toISODate()!, s.days);
+    for (const profile of s.profiles.filter((x) => all || x.id === p.id)) {
+      const date = d.toISODate()!,
+        scheduled = scheduledTarget(profile, date);
+      regularGoal += scheduled;
+      if (
+        !s.days.some(
+          (day) =>
+            day.profileId === profile.id && day.date === date && day.absence,
+        )
+      )
+        reportGoal += scheduled;
+      elapsedGoal += target(profile, date, s.days);
+    }
   function csvExport() {
     download(
       "tectracker.csv",
@@ -904,7 +918,7 @@ export default function App() {
               <Metric
                 title="SOLLZEIT"
                 value={duration(reportGoal)}
-                sub={duration(total - reportGoal) + " Saldo"}
+                sub={duration(total - elapsedGoal) + " Saldo bis heute"}
               />
               <Metric
                 title="OHNE STUNDENSATZ"
@@ -928,11 +942,21 @@ export default function App() {
                 accent
               />
             </div>
-            <AbsenceSummary
-              state={s}
-              days={absences}
-              onRemove={removeAbsence}
-            />
+            {regularGoal !== reportGoal && (
+              <p className="goal-adjustment">
+                Reguläre Sollzeit <strong>{duration(regularGoal)}</strong> −{" "}
+                <strong>{duration(regularGoal - reportGoal)}</strong> Urlaub /
+                Krankheit / Frei = <strong>{duration(reportGoal)}</strong>{" "}
+                verbleibende Sollzeit
+              </p>
+            )}
+            {page === "Statistik" && (
+              <AbsenceSummary
+                state={s}
+                days={absences}
+                onRemove={removeAbsence}
+              />
+            )}
             {page === "Statistik" && (
               <>
                 <section className="card padded">
@@ -1097,7 +1121,12 @@ export default function App() {
               </>
             )}
             {page === "Verlauf" &&
-              Array.from(new Set(report.map((x) => x.date)))
+              Array.from(
+                new Set([
+                  ...report.map((x) => x.date),
+                  ...absences.map((x) => x.date),
+                ]),
+              )
                 .sort()
                 .reverse()
                 .map((d) => (
@@ -1105,26 +1134,60 @@ export default function App() {
                     <div className="day-heading">
                       <strong>{germanDate(d)}</strong>
                       <span>
-                        {duration(
-                          report
-                            .filter((x) => x.date === d)
-                            .reduce((a, x) => a + x.net, 0),
-                        )}{" "}
-                        ·{" "}
-                        {money(
-                          report
-                            .filter((x) => x.date === d)
-                            .reduce((a, x) => a + x.cents, 0),
+                        {!report.some((x) => x.date === d) ? (
+                          <>
+                            {duration(
+                              absences
+                                .filter((x) => x.date === d)
+                                .reduce(
+                                  (n, day) =>
+                                    n +
+                                    scheduledTarget(
+                                      s.profiles.find(
+                                        (p) => p.id === day.profileId,
+                                      )!,
+                                      d,
+                                    ),
+                                  0,
+                                ),
+                            )}{" "}
+                            Sollzeit entfällt
+                          </>
+                        ) : (
+                          <>
+                            {duration(
+                              report
+                                .filter((x) => x.date === d)
+                                .reduce((a, x) => a + x.net, 0),
+                            )}{" "}
+                            ·{" "}
+                            {money(
+                              report
+                                .filter((x) => x.date === d)
+                                .reduce((a, x) => a + x.cents, 0),
+                            )}
+                          </>
                         )}
                       </span>
                     </div>
-                    {entryList([
-                      ...new Map(
-                        report
-                          .filter((x) => x.date === d)
-                          .map((x) => [x.entry.id, x.entry]),
-                      ).values(),
-                    ])}
+                    {absences
+                      .filter((day) => day.date === d)
+                      .map((day) => (
+                        <AbsenceTimelineRow
+                          key={day.profileId + day.date}
+                          state={s}
+                          day={day}
+                          onRemove={removeAbsence}
+                        />
+                      ))}
+                    {report.some((x) => x.date === d) &&
+                      entryList([
+                        ...new Map(
+                          report
+                            .filter((x) => x.date === d)
+                            .map((x) => [x.entry.id, x.entry]),
+                        ).values(),
+                      ])}
                   </section>
                 ))}
           </>

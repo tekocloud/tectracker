@@ -128,10 +128,83 @@ test("Urlaub über Zeit nachtragen wirkt auf Sollzeit und erscheint im Verlauf u
     fullPage: true,
   });
   await page.getByRole("button", { name: "Verlauf", exact: true }).click();
-  await expect(page.locator(".absence-row")).toContainText("Urlaub");
+  await expect(page.locator(".history-day .absence-entry")).toContainText(
+    "Urlaub",
+  );
+  await expect(page.locator(".absence-summary")).toHaveCount(0);
+  await expect(page.locator(".history-day .absence-entry")).toContainText(
+    "−7:24:00",
+  );
   await page.reload();
   await page.getByRole("button", { name: "Statistik", exact: true }).click();
   await expect(page.locator(".absence-row")).toContainText("06.11.2026");
+});
+test("Abwesenheiten stehen zwischen Arbeitszeiten am passenden Datum und reduzieren die ganze Woche", async ({
+  page,
+}) => {
+  await seed(page, true, true);
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem("tectracker")!);
+    s.days.push(
+      {
+        profileId: "profile",
+        date: "2026-11-04",
+        absence: "Krankheit",
+        actual: 0,
+        planned: 0,
+      },
+      {
+        profileId: "profile",
+        date: "2026-11-03",
+        absence: "Frei",
+        actual: 0,
+        planned: 0,
+      },
+    );
+    s.entries.push({
+      ...s.entries[0],
+      id: "older",
+      start: "2026-11-02T08:00:00Z",
+      end: "2026-11-02T16:00:00Z",
+    });
+    localStorage.setItem("tectracker", JSON.stringify(s));
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Verlauf", exact: true }).click();
+  await expect(page.locator(".history-day .day-heading>strong")).toHaveText([
+    "06.11.2026",
+    "05.11.2026",
+    "04.11.2026",
+    "03.11.2026",
+    "02.11.2026",
+  ]);
+  await expect(
+    page.locator(".history-day .absence-entry .entry-title>strong"),
+  ).toHaveText(["Urlaub", "Krankheit", "Frei"]);
+  await expect(
+    page.locator(".history-day").filter({ hasText: "05.11.2026" }),
+  ).not.toContainText("Platz für deinen Arbeitstag");
+  await expect(page.locator(".metrics")).toContainText("14:48:00");
+  await expect(page.locator(".goal-adjustment")).toContainText(
+    "37:00:00 − 22:12:00",
+  );
+  await page.screenshot({
+    path: "test-results/verlauf-abwesenheiten.png",
+    fullPage: true,
+    animations: 'disabled',
+  });
+});
+test("geplanter Urlaub reduziert die volle Wochen-Sollzeit ohne zukünftige Minusstunden", async ({
+  page,
+}) => {
+  await seed(page, false, true);
+  await page.clock.setFixedTime(new Date("2026-11-02T17:00:00Z"));
+  await page.getByRole("button", { name: "Verlauf", exact: true }).click();
+  await expect(page.locator(".metrics")).toContainText("29:36:00");
+  await expect(page.locator(".metrics")).toContainText(
+    "−7:24:00 Saldo bis heute",
+  );
+  await expect(page.locator(".history-day")).toContainText("05.11.2026");
 });
 test("Einstellungen enthalten keine Abwesenheitseingabe; Altdaten bleiben sichtbar", async ({
   page,

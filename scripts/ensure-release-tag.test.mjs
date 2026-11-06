@@ -27,6 +27,10 @@ test("404-Fehlerkörper wird nicht als Commit behandelt: fehlenden Tag erstellen
   });
   assert.equal(result.created, true);
   assert.equal(calls.length, 2);
+  assert.equal(
+    calls[0].url,
+    "https://api.github.com/repos/tekocloud/tectracker/git/ref/tags/v0.1.3",
+  );
   assert.equal(calls[1].options.method, "POST");
   assert.deepEqual(JSON.parse(calls[1].options.body), {
     ref: "refs/tags/v0.1.3",
@@ -47,7 +51,7 @@ test("existierender passender Tag wird ohne Schreibzugriff übernommen", async (
     ).created,
     false,
   );
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
 });
 test("echter Tag-Konflikt nennt beide Commits und verändert nichts", async () => {
   let calls = 0;
@@ -61,7 +65,7 @@ test("echter Tag-Konflikt nennt beide Commits und verändert nichts", async () =
     }),
     new RegExp(other),
   );
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
 });
 test("fehlende Berechtigung ist kein fehlender Tag", async () => {
   let calls = 0;
@@ -98,4 +102,37 @@ test("ungültige erfolgreiche API-Antwort wird abgelehnt", async () => {
     }),
     /keinen gültigen Commit/,
   );
+});
+
+test("annotierter Tag wird über den vollständigen Tag-Verweis zum Commit aufgelöst", async () => {
+  const urls = [];
+  const result = await ensureReleaseTag({
+    ...base,
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return urls.length === 1
+        ? response(200, { object: { type: "tag", sha: other } })
+        : response(200, { sha });
+    },
+  });
+  assert.deepEqual(result, { created: false, sha });
+  assert.deepEqual(urls, [
+    "https://api.github.com/repos/tekocloud/tectracker/git/ref/tags/v0.1.3",
+    "https://api.github.com/repos/tekocloud/tectracker/commits/refs%2Ftags%2Fv0.1.3",
+  ]);
+});
+
+test("HTTP 422 bei der Tag-Abfrage erlaubt keine Tag-Erstellung", async () => {
+  let calls = 0;
+  await assert.rejects(
+    ensureReleaseTag({
+      ...base,
+      fetchImpl: async () => {
+        calls++;
+        return response(422, { message: "Validation Failed" });
+      },
+    }),
+    /HTTP 422/,
+  );
+  assert.equal(calls, 1);
 });

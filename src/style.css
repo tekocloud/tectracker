@@ -891,6 +891,23 @@ footer {
 .absence-summary {
   margin: 22px 0;
 }
+.absence-entry .color-dot {
+  background: #a18ad7;
+}
+.absence-entry .entry-total strong {
+  color: var(--blue);
+}
+.goal-adjustment {
+  font-size: 12px;
+  color: var(--muted);
+  margin: -5px 0 22px;
+  line-height: 1.7;
+}
+.goal-adjustment strong {
+  color: var(--ink);
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
 .absence-counts {
   display: flex;
   gap: 18px;

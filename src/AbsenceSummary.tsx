@@ -1,5 +1,39 @@
 import { DateTime } from "luxon";
 import { duration, scheduledTarget, type State, type Day } from "./core";
+export function AbsenceTimelineRow({
+  state,
+  day,
+  onRemove,
+}: {
+  state: State;
+  day: Day;
+  onRemove: (day: Day) => void;
+}) {
+  const profile = state.profiles.find((p) => p.id === day.profileId)!;
+  return (
+    <div className="entry absence-entry">
+      <span className="color-dot" />
+      <div className="entry-title">
+        <strong>{day.absence}</strong>
+        <small>{profile.name} · Ganztägige Abwesenheit</small>
+      </div>
+      <div className="entry-time">
+        Ganztägig<small>Keine Arbeitszeit</small>
+      </div>
+      <div className="entry-total">
+        <strong>−{duration(scheduledTarget(profile, day.date))}</strong>
+        <small>Sollzeit entfällt</small>
+      </div>
+      <button
+        className="icon danger"
+        title={`${day.absence} entfernen`}
+        onClick={() => onRemove(day)}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
 export default function AbsenceSummary({
   state,
   days,
