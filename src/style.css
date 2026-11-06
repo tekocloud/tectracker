@@ -569,6 +569,26 @@ label {
   font-size: 11px;
   color: var(--muted);
 }
+.datetime-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.datetime-fields legend {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.datetime-parts {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr 1fr;
+  gap: 8px;
+}
+.datetime-parts input {
+  text-align: center;
+  padding-inline: 4px;
+}
 label > input:not([type="checkbox"]),
 label > select {
   display: block;

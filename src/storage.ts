@@ -51,6 +51,21 @@ export function parseBackup(raw: string): State {
   if (!x.profiles.some((p) => !p.archived))
     throw Error("Mindestens ein aktives Profil erforderlich.");
   for (const p of x.profiles) {
+    if (p.overtime !== undefined) {
+      const account = p.overtime;
+      const validDate = (value: string) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && DateTime.fromISO(value).isValid;
+      if (!account || !validDate(account.from) || account.from > DateTime.now().setZone(p.zone).toISODate()! ||
+          !Number.isSafeInteger(account.openingSeconds) || !Array.isArray(account.corrections))
+        throw Error("Ungültiges Überstundenkonto.");
+      const dates = new Set<string>();
+      for (const correction of account.corrections) {
+        if (!correction || !validDate(correction.date) || correction.date < account.from ||
+            correction.date >= DateTime.now().setZone(p.zone).toISODate()! || dates.has(correction.date) ||
+            !Number.isSafeInteger(correction.seconds) || typeof correction.reason !== "string")
+          throw Error("Ungültige Überstundenkorrektur.");
+        dates.add(correction.date);
+      }
+    }
     if (
       typeof p.name !== "string" ||
       !DateTime.now().setZone(p.zone).isValid ||

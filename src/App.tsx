@@ -1,4 +1,5 @@
 import Select from "./Select";
+import OvertimePanel, { OvertimeCard } from "./OvertimePanel";
 import Modal from "./Modal";
 import { useDialogs } from "./Dialogs";
 import { useEffect, useState, useRef } from "react";
@@ -6,6 +7,7 @@ import { version } from "../package.json";
 import PauseEditor from "./PauseEditor";
 import AbsenceSummary, { AbsenceTimelineRow } from "./AbsenceSummary";
 import GermanDateInput, { germanDate } from "./GermanDateInput";
+import DateTimeFields from "./DateTimeFields";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { DateTime } from "luxon";
@@ -578,6 +580,7 @@ export default function App() {
             [Clock3, "Zeiterfassung"],
             [List, "Verlauf"],
             [BarChart3, "Statistik"],
+            [Clock3, "Überstunden"],
             [Layers, "Stammdaten"],
             [Settings, "Einstellungen"],
           ].map(([Icon, label]) => {
@@ -762,6 +765,7 @@ export default function App() {
                 accent
               />
             </div>
+            <OvertimeCard s={s} p={p} now={tick} open={() => Page("Überstunden")} />
             <section className="card progress-card">
               <div>
                 <strong>Dein Tagesfortschritt</strong>
@@ -1259,6 +1263,7 @@ export default function App() {
                 ))}
           </>
         )}
+        {page === "Überstunden" && <OvertimePanel key={p.id} s={s} p={p} now={tick} commit={commit} />}
         {page === "Stammdaten" && (
           <>
             <div className="tabs">
@@ -1578,27 +1583,49 @@ export default function App() {
                   />
                 </label>
                 {(["start", "end"] as const).map((k) => (
-                  <label key={k}>
-                    {k === "start" ? "Beginn" : "Ende"}
-                    <GermanDateInput
-                      dateTime
-                      required={k === "start" || !!edit.end}
-                      value={
-                        edit[k]
-                          ? DateTime.fromISO(edit[k]!)
-                              .setZone("Europe/Berlin")
-                              .toFormat("yyyy-MM-dd'T'HH:mm:ss")
-                          : ""
-                      }
-                      onValueChange={(value) => {
-                        const d = DateTime.fromISO(value, {
+                  <DateTimeFields
+                    key={k}
+                    label={k === "start" ? "Beginn" : "Ende"}
+                    required={k === "start" || !!edit.end}
+                    value={
+                      edit[k]
+                        ? DateTime.fromISO(edit[k]!)
+                            .setZone("Europe/Berlin")
+                            .toFormat("yyyy-MM-dd'T'HH:mm:ss")
+                        : ""
+                    }
+                    onValueChange={(value) => {
+                      const d = DateTime.fromISO(value, {
+                        zone: "Europe/Berlin",
+                      });
+                      if (d.isValid) {
+                        const previous = DateTime.fromISO(edit.start, {
                           zone: "Europe/Berlin",
                         });
-                        if (d.isValid)
-                          Edit({ ...edit, [k]: d.toUTC().toISO()! });
-                      }}
-                    />
-                  </label>
+                        const end =
+                          edit.end &&
+                          DateTime.fromISO(edit.end, { zone: "Europe/Berlin" });
+                        Edit({
+                          ...edit,
+                          [k]: d.toUTC().toISO()!,
+                          ...(k === "start" &&
+                          end &&
+                          previous.toISODate() !== d.toISODate()
+                            ? {
+                                end: end
+                                  .set({
+                                    year: d.year,
+                                    month: d.month,
+                                    day: d.day,
+                                  })
+                                  .toUTC()
+                                  .toISO()!,
+                              }
+                            : {}),
+                        });
+                      }
+                    }}
+                  />
                 ))}
                 <PauseEditor
                   entry={edit}

@@ -17,6 +17,11 @@ export type Profile = {
   plans: Plan[];
   rateId?: string;
   archived?: boolean;
+  overtime?: {
+    from: string;
+    openingSeconds: number;
+    corrections: { date: string; seconds: number; reason: string }[];
+  };
 };
 export type Entry = {
   id: string;

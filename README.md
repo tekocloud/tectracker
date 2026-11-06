@@ -39,7 +39,7 @@ Die Versionen in `package.json`, `src-tauri/Cargo.toml` und `src-tauri/tauri.con
 Für künftige Versionsänderungen diesen Befehl verwenden, damit alle drei Manifeste und beide Lockdateien gemeinsam aktualisiert werden:
 
 ```sh
-npm run version:set -- 0.1.3
+npm run version:set -- 0.2.3
 ```
 
 Ohne Versionsargument gleicht `npm run version:set` die anderen Dateien auf die bereits in `package.json` eingetragene Version ab. Anschließend alle geänderten Versionsdateien zusammen committen und pushen. Abhängigkeiten werden dabei nicht aktualisiert.

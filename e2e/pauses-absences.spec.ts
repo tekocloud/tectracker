@@ -1,5 +1,46 @@
 import { test, expect, type Page } from "@playwright/test";
 test.use({ locale: "en-US", timezoneId: "America/New_York" });
+
+test("Datumsfelder folgen der Tab-Reihenfolge und übernehmen das Beginndatum", async ({
+  page,
+}) => {
+  await seed(page, true);
+  await page.getByTitle("Bearbeiten", { exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const names = ["Tag", "Monat", "Jahr", "Stunde", "Minute", "Sekunde"];
+  await dialog.getByLabel("Beginn Tag", { exact: true }).focus();
+  for (const prefix of ["Beginn", "Ende"]) {
+    for (const name of names) {
+      const field = dialog.getByLabel(`${prefix} ${name}`, { exact: true });
+      await expect(field).toBeFocused();
+      await field.press("Tab");
+    }
+  }
+  await dialog.getByLabel("Beginn Tag", { exact: true }).fill("05");
+  await expect(dialog.getByLabel("Ende Tag", { exact: true })).toHaveValue(
+    "05",
+  );
+  await expect(dialog.getByLabel("Ende Stunde", { exact: true })).toHaveValue(
+    "17",
+  );
+  await dialog.getByLabel("Beginn Monat", { exact: true }).fill("10");
+  await expect(dialog.getByLabel("Ende Monat", { exact: true })).toHaveValue(
+    "10",
+  );
+  await dialog.getByLabel("Beginn Jahr", { exact: true }).fill("2025");
+  await expect(dialog.getByLabel("Ende Jahr", { exact: true })).toHaveValue(
+    "2025",
+  );
+  await dialog.getByLabel("Beginn Sekunde", { exact: true }).fill("12");
+  await dialog.getByLabel("Ende Tag", { exact: true }).fill("06");
+  await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const entry = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("tectracker")!).entries[0],
+  );
+  expect(entry.start).toBe("2025-10-05T07:00:12.000Z");
+  expect(entry.end).toBe("2025-10-06T15:00:00.000Z");
+});
 async function seed(page: Page, withEntry = false, legacyAbsence = false) {
   await page.clock.install({ time: new Date("2026-11-06T17:00:00Z") });
   const state = {
@@ -58,8 +99,11 @@ test("mehrere Pausen hinzufügen, validieren, speichern und bearbeiten", async (
   await seed(page, true);
   await page.getByTitle("Bearbeiten", { exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByLabel("Beginn", { exact: true })).toHaveValue(
-    "06.11.2026 09:00:00",
+  await expect(dialog.getByLabel("Beginn Tag", { exact: true })).toHaveValue(
+    "06",
+  );
+  await expect(dialog.getByLabel("Beginn Stunde", { exact: true })).toHaveValue(
+    "09",
   );
   await expect(dialog.getByText("Noch keine Pause eingetragen.")).toBeVisible();
   await dialog.getByRole("button", { name: "Pause hinzufügen" }).click();
