@@ -51,6 +51,7 @@ export default function GermanDateInput({
     if (value !== undefined) Text(display(value));
   }, [value, dateTime]);
   const parsed = parseGermanInput(text, dateTime);
+  const picker = useRef<HTMLInputElement>(null);
   const valid = !!parsed?.isValid;
   const iso = valid
     ? parsed!.toFormat(dateTime ? "yyyy-MM-dd'T'HH:mm:ss" : "yyyy-MM-dd")
@@ -71,6 +72,14 @@ export default function GermanDateInput({
         lang="de-DE"
         placeholder={dateTime ? "TT.MM.JJJJ HH:mm" : "TT.MM.JJJJ"}
         value={text}
+        onClick={(event) => {
+          props.onClick?.(event);
+          try {
+            picker.current?.showPicker();
+          } catch {
+            /* Direct input stays available. */
+          }
+        }}
         onChange={(e) => {
           const next = e.target.value;
           Text(next);
@@ -83,6 +92,34 @@ export default function GermanDateInput({
         }}
       />
       {name && <input type="hidden" name={name} value={iso} />}
+      <span style={{ position: "relative", display: "inline-block" }}>
+        <input
+          type="date"
+          ref={picker}
+          aria-label={`${props["aria-label"] || "Datum"} Kalenderdatum`}
+          tabIndex={-1}
+          style={{
+            position: "absolute",
+            left: 0,
+            bottom: 0,
+            width: 1,
+            height: 1,
+            opacity: 0,
+            pointerEvents: "none",
+          }}
+          value={iso.slice(0, 10)}
+          onChange={(event) => {
+            if (!event.target.value) return;
+            const next =
+              event.target.value +
+              (dateTime
+                ? `T${parsed?.toFormat("HH:mm:ss") || "00:00:00"}`
+                : "");
+            Text(display(next));
+            onValueChange?.(next);
+          }}
+        />
+      </span>
     </>
   );
 }

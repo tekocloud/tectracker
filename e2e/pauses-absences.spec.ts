@@ -41,6 +41,36 @@ test("Datumsfelder folgen der Tab-Reihenfolge und übernehmen das Beginndatum", 
   expect(entry.start).toBe("2025-10-05T07:00:12.000Z");
   expect(entry.end).toBe("2025-10-06T15:00:00.000Z");
 });
+test("Kalenderauswahl übernimmt das Datum und erhält die Uhrzeit", async ({ page }) => {
+  await seed(page, true);
+  await page.getByTitle("Bearbeiten", { exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await page.evaluate(() => {
+    HTMLInputElement.prototype.showPicker = function () { this.dataset.opened = "yes"; };
+  });
+  for (const part of ["Tag", "Monat", "Jahr"]) {
+    await dialog.getByLabel(`Beginn ${part}`, { exact: true }).click();
+    await expect(dialog.getByLabel("Beginn Kalenderdatum", { exact: true })).toHaveAttribute("data-opened", "yes");
+  }
+  await dialog.getByLabel("Beginn Kalenderdatum", { exact: true }).fill("2026-11-05");
+  await expect(dialog.getByLabel("Beginn Tag", { exact: true })).toHaveValue("05");
+  await expect(dialog.getByLabel("Beginn Stunde", { exact: true })).toHaveValue("09");
+  await expect(dialog.getByLabel("Ende Tag", { exact: true })).toHaveValue("05");
+  await dialog.getByLabel("Ende Minute", { exact: true }).click();
+  await expect(dialog.getByLabel("Ende Uhrzeitauswahl", { exact: true })).toHaveAttribute("data-opened", "yes");
+  await dialog.getByLabel("Ende Uhrzeitauswahl", { exact: true }).fill("18:51:42");
+  await expect(dialog.getByLabel("Ende Stunde", { exact: true })).toHaveValue("18");
+  await expect(dialog.getByLabel("Ende Minute", { exact: true })).toHaveValue("51");
+  await expect(dialog.getByLabel("Ende Sekunde", { exact: true })).toHaveValue("42");
+  await expect(dialog.getByLabel("Ende Tag", { exact: true })).toHaveValue("05");
+  await dialog.getByRole("button", { name: "Pause hinzufügen" }).click();
+  await dialog.getByLabel("Pause 1 Beginn Uhrzeitauswahl", { exact: true }).fill("12:00:00");
+  await dialog.getByLabel("Pause 1 Ende Uhrzeitauswahl", { exact: true }).fill("12:45:00");
+  await expect(dialog.getByLabel("Pause 1 Ende Minute", { exact: true })).toHaveValue("45");
+  await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+});
+
 async function seed(page: Page, withEntry = false, legacyAbsence = false) {
   await page.clock.install({ time: new Date("2026-11-06T17:00:00Z") });
   const state = {
@@ -94,12 +124,21 @@ async function seed(page: Page, withEntry = false, legacyAbsence = false) {
   ).toBeVisible();
 }
 
-test("Ziffern bleiben beim Tippen und Tab-Wechsel unverändert", async ({ page }) => {
+test("Ziffern bleiben beim Tippen und Tab-Wechsel unverändert", async ({
+  page,
+}) => {
   await seed(page, true);
   await page.getByTitle("Bearbeiten", { exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Ende Tag", { exact: true }).focus();
-  for (const [name, value] of [["Tag", "16"], ["Monat", "12"], ["Jahr", "2026"], ["Stunde", "21"], ["Minute", "51"], ["Sekunde", "42"]]) {
+  for (const [name, value] of [
+    ["Tag", "16"],
+    ["Monat", "12"],
+    ["Jahr", "2026"],
+    ["Stunde", "21"],
+    ["Minute", "51"],
+    ["Sekunde", "42"],
+  ]) {
     const field = dialog.getByLabel(`Ende ${name}`, { exact: true });
     await expect(field).toBeFocused();
     await field.pressSequentially(value[0]);
@@ -116,9 +155,43 @@ test("Ziffern bleiben beim Tippen und Tab-Wechsel unverändert", async ({ page }
   await expect(minute).toHaveValue("05");
   await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  const end = await page.evaluate(() => JSON.parse(localStorage.getItem("tectracker")!).entries[0].end);
+  const end = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("tectracker")!).entries[0].end,
+  );
   expect(end).toBe("2026-12-16T20:05:42.000Z");
 });
+test("Tagespausendauer akzeptiert 45min und bleibt nach Neuladen erhalten", async ({
+  page,
+}) => {
+  await seed(page, true);
+  await page.getByTitle("Bearbeiten", { exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Tagespause direkt in Minuten").fill("45");
+  await expect(
+    dialog.getByLabel("Pausendauer gesamt für diesen Tag"),
+  ).toHaveValue("45min");
+  await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator(".metrics")).toContainText("7:15:00");
+  await page.reload();
+  await page.getByTitle("Bearbeiten", { exact: true }).click();
+  await expect(
+    dialog.getByLabel("Pausendauer gesamt für diesen Tag"),
+  ).toHaveValue("45min");
+  await dialog.getByLabel("Pausendauer gesamt für diesen Tag").fill("999min");
+  await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("nicht überschreiten");
+  await dialog
+    .getByRole("button", { name: "Dialog schließen", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Verlauf", exact: true }).click();
+  await expect(
+    page
+      .locator(".history-day .day-heading strong")
+      .filter({ hasText: "Freitag, 06.11.2026" }),
+  ).toBeVisible();
+});
+
 test("mehrere Pausen hinzufügen, validieren, speichern und bearbeiten", async ({
   page,
 }) => {
@@ -133,27 +206,27 @@ test("mehrere Pausen hinzufügen, validieren, speichern und bearbeiten", async (
   );
   await expect(dialog.getByText("Noch keine Pause eingetragen.")).toBeVisible();
   await dialog.getByRole("button", { name: "Pause hinzufügen" }).click();
-  await dialog
-    .getByLabel("Pause 1 Beginn", { exact: true })
-    .fill("06.11.2026 12:00:00");
-  await dialog
-    .getByLabel("Pause 1 Ende", { exact: true })
-    .fill("06.11.2026 12:30:00");
+  await dialog.getByLabel("Pause 1 Beginn Stunde", { exact: true }).fill("12");
+  await dialog.getByLabel("Pause 1 Beginn Minute", { exact: true }).fill("00");
+  await dialog.getByLabel("Pause 1 Beginn Sekunde", { exact: true }).fill("00");
+  await dialog.getByLabel("Pause 1 Ende Stunde", { exact: true }).fill("12");
+  await dialog.getByLabel("Pause 1 Ende Minute", { exact: true }).fill("30");
+  await dialog.getByLabel("Pause 1 Ende Sekunde", { exact: true }).fill("00");
   await dialog.getByRole("button", { name: "Pause hinzufügen" }).click();
-  await dialog
-    .getByLabel("Pause 2 Beginn", { exact: true })
-    .fill("06.11.2026 12:15:00");
-  await dialog
-    .getByLabel("Pause 2 Ende", { exact: true })
-    .fill("06.11.2026 12:45:00");
+  await dialog.getByLabel("Pause 2 Beginn Stunde", { exact: true }).fill("12");
+  await dialog.getByLabel("Pause 2 Beginn Minute", { exact: true }).fill("15");
+  await dialog.getByLabel("Pause 2 Beginn Sekunde", { exact: true }).fill("00");
+  await dialog.getByLabel("Pause 2 Ende Stunde", { exact: true }).fill("12");
+  await dialog.getByLabel("Pause 2 Ende Minute", { exact: true }).fill("45");
+  await dialog.getByLabel("Pause 2 Ende Sekunde", { exact: true }).fill("00");
   await dialog.getByRole("button", { name: "Speichern", exact: true }).click();
   await expect(dialog.getByRole("alert")).toContainText("überschneiden");
-  await dialog
-    .getByLabel("Pause 2 Beginn", { exact: true })
-    .fill("06.11.2026 15:00:00");
-  await dialog
-    .getByLabel("Pause 2 Ende", { exact: true })
-    .fill("06.11.2026 15:15:00");
+  await dialog.getByLabel("Pause 2 Beginn Stunde", { exact: true }).fill("15");
+  await dialog.getByLabel("Pause 2 Beginn Minute", { exact: true }).fill("00");
+  await dialog.getByLabel("Pause 2 Beginn Sekunde", { exact: true }).fill("00");
+  await dialog.getByLabel("Pause 2 Ende Stunde", { exact: true }).fill("15");
+  await dialog.getByLabel("Pause 2 Ende Minute", { exact: true }).fill("15");
+  await dialog.getByLabel("Pause 2 Ende Sekunde", { exact: true }).fill("00");
   await expect(dialog.locator(".pause-summary")).toContainText("0:45:00");
   await page.screenshot({
     path: "test-results/pausen-bearbeiten.png",
@@ -166,8 +239,8 @@ test("mehrere Pausen hinzufügen, validieren, speichern und bearbeiten", async (
   await page.reload();
   await page.getByTitle("Bearbeiten", { exact: true }).click();
   await expect(
-    dialog.getByLabel("Pause 2 Beginn", { exact: true }),
-  ).toHaveValue("06.11.2026 15:00:00");
+    dialog.getByLabel("Pause 2 Beginn Stunde", { exact: true }),
+  ).toHaveValue("15");
   await dialog
     .getByRole("button", { name: "Pause 1 entfernen", exact: true })
     .click();
@@ -242,11 +315,11 @@ test("Abwesenheiten stehen zwischen Arbeitszeiten am passenden Datum und reduzie
   await page.reload();
   await page.getByRole("button", { name: "Verlauf", exact: true }).click();
   await expect(page.locator(".history-day .day-heading>strong")).toHaveText([
-    "06.11.2026",
-    "05.11.2026",
-    "04.11.2026",
-    "03.11.2026",
-    "02.11.2026",
+    "Freitag, 06.11.2026",
+    "Donnerstag, 05.11.2026",
+    "Mittwoch, 04.11.2026",
+    "Dienstag, 03.11.2026",
+    "Montag, 02.11.2026",
   ]);
   await expect(
     page.locator(".history-day .absence-entry .entry-title>strong"),

@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import GermanDateInput from "./GermanDateInput";
+import DateTimeFields from "./DateTimeFields";
 import { Plus, Trash2 } from "lucide-react";
 import { duration, type Entry } from "./core";
 
@@ -37,7 +37,7 @@ export default function PauseEditor({
       <div className="pause-heading">
         <div>
           <h3>Pausenzeiten</h3>
-          <p>Trage deine Pausen nach – auch mehrere pro Arbeitstag.</p>
+          <p>Pausenzeiten beziehen sich auf den Tag des Arbeitsbeginns.</p>
         </div>
         <button type="button" className="secondary" onClick={add}>
           <Plus size={15} />
@@ -52,35 +52,47 @@ export default function PauseEditor({
           <legend>Pause {i + 1}</legend>
           <div className="pause-inputs">
             {(["start", "end"] as const).map((k) => (
-              <label key={k}>
-                {k === "start" ? "Von" : "Bis"}
-                <GermanDateInput
-                  aria-label={`Pause ${i + 1} ${k === "start" ? "Beginn" : "Ende"}`}
-                  dateTime
+              <div key={k}>
+                <DateTimeFields
+                  label={`Pause ${i + 1} ${k === "start" ? "Beginn" : "Ende"}`}
+                  timeOnly
+                  baseDate={DateTime.fromISO(entry.start)
+                    .setZone(zone)
+                    .toISODate()!}
+
                   required={
                     k === "start" || !!entry.end || pause.end !== undefined
                   }
                   value={
                     pause[k] && DateTime.fromISO(pause[k]!).isValid
                       ? DateTime.fromISO(pause[k]!)
-                          .setZone("Europe/Berlin")
+                          .setZone(zone)
                           .toFormat("yyyy-MM-dd'T'HH:mm:ss")
                       : ""
                   }
                   onValueChange={(value) => {
-                    const d = DateTime.fromISO(value, {
-                      zone: "Europe/Berlin",
-                    });
+                    const day = DateTime.fromISO(entry.start)
+                      .setZone(zone)
+                      .toISODate();
+                    const d = DateTime.fromISO(
+                      `${day}T${value.split("T")[1]}`,
+                      {
+                        zone,
+                      },
+                    );
                     onChange(
                       entry.pauses.map((p, j) =>
                         j === i
-                          ? { ...p, [k]: d.isValid ? d.toUTC().toISO()! : "" }
+                          ? {
+                              ...p,
+                              [k]: d.isValid ? d.toUTC().toISO()! : value,
+                            }
                           : p,
                       ),
                     );
                   }}
                 />
-              </label>
+              </div>
             ))}
             <button
               type="button"

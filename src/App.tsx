@@ -5,6 +5,7 @@ import { useDialogs } from "./Dialogs";
 import { useEffect, useState, useRef } from "react";
 import { version } from "../package.json";
 import PauseEditor from "./PauseEditor";
+import { parsePauseDuration } from "./pauseDuration";
 import AbsenceSummary, { AbsenceTimelineRow } from "./AbsenceSummary";
 import GermanDateInput, { germanDate } from "./GermanDateInput";
 import DateTimeFields from "./DateTimeFields";
@@ -60,6 +61,7 @@ const blank = () => ({
 });
 export default function App() {
   const { confirm, prompt } = useDialogs();
+  const [pauseDuration, setPauseDuration] = useState<string | null>(null);
   const [s, S] = useState<State>(initial),
     [ready, R] = useState(false),
     [pid, P] = useState(""),
@@ -116,6 +118,7 @@ export default function App() {
           .toISODate()!,
       );
   }, [edit?.id]);
+  useEffect(() => setPauseDuration(null), [edit?.id]);
   function newEntry() {
     Edit({
       id: uid(),
@@ -1203,7 +1206,7 @@ export default function App() {
                 .map((d) => (
                   <section className="card history-day" key={d}>
                     <div className="day-heading">
-                      <strong>{germanDate(d)}</strong>
+                      <strong>{DateTime.fromISO(d, { zone: p.zone }).setLocale("de").toFormat("cccc, dd.MM.yyyy")}</strong>
                       <span>
                         {!report.some((x) => x.date === d) ? (
                           <>
@@ -1520,11 +1523,22 @@ export default function App() {
                   ),
                 };
                 validateEntry(s, updated);
+                const pauseDate = DateTime.fromISO(updated.start).setZone(s.profiles.find(profile => profile.id === updated.profileId)!.zone).toISODate()!;
+                const entries = s.entries.some(x => x.id === updated.id)
+                  ? s.entries.map(x => x.id === updated.id ? updated : x)
+                  : [...s.entries, updated];
+                let days = s.days;
+                if (pauseDuration !== null) {
+                  const actual = parsePauseDuration(pauseDuration);
+                  const gross = slices({ ...s, entries }).filter(row => row.entry.profileId === updated.profileId && row.date === pauseDate).reduce((sum, row) => sum + row.gross, 0);
+                  if (!Number.isSafeInteger(actual) || actual < 0 || actual > gross) throw Error("Die Pause darf die erfasste Zeit dieses Tages nicht überschreiten.");
+                  const old = s.days.find(day => day.profileId === updated.profileId && day.date === pauseDate);
+                  days = [...s.days.filter(day => !(day.profileId === updated.profileId && day.date === pauseDate)), { profileId: updated.profileId, date: pauseDate, planned: 0, absence: "", ...old, actual }];
+                }
                 commit({
                   ...s,
-                  entries: s.entries.some((x) => x.id === edit.id)
-                    ? s.entries.map((x) => (x.id === edit.id ? updated : x))
-                    : [...s.entries, updated],
+                  entries,
+                  days,
                 });
                 Edit(null);
               });
@@ -1635,6 +1649,15 @@ export default function App() {
                   }
                   onChange={(pauses) => Edit({ ...edit, pauses })}
                 />
+                <label>
+                  Pausendauer gesamt für diesen Tag
+                  <input placeholder="z. B. 45min oder 00:45:00" value={pauseDuration ?? ((s.days.find(day => day.profileId === edit.profileId && day.date === DateTime.fromISO(edit.start).setZone(p.zone).toISODate())?.actual || 0) / 60 + "min")} onChange={event => setPauseDuration(event.target.value)} />
+                </label>
+                <p className="muted">Alternativ zu genauen Pausenzeiten: Die Dauer wird einmal von der gesamten Arbeitszeit dieses Tages abgezogen. Bereits erfasste Timerpausen werden angerechnet, damit sie nicht doppelt zählen.</p>
+                <label>
+                  Tagespause direkt in Minuten
+                  <input type="number" min="0" step="any" value={pauseDuration === null ? (s.days.find(day => day.profileId === edit.profileId && day.date === DateTime.fromISO(edit.start).setZone(p.zone).toISODate())?.actual || 0) / 60 : (() => { try { return parsePauseDuration(pauseDuration) / 60; } catch { return ""; } })()} onChange={event => setPauseDuration(event.target.value ? `${event.target.value}min` : "")} />
+                </label>
                 {select("category", edit.categoryId, (v) =>
                   Edit({ ...edit, categoryId: v }),
                 )}
