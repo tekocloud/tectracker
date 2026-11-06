@@ -1572,3 +1572,153 @@ main > .card:nth-child(n + 3) {
     transform: none;
   }
 }
+
+/* Overtime follows the workspace's metric, table and form rhythm. */
+.overtime-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.overtime-title > svg {
+  color: var(--blue);
+  flex: none;
+}
+.overtime-title h2 {
+  margin: 0;
+}
+.overtime-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.overtime-metrics .metric {
+  min-width: 0;
+}
+.overtime-metrics small {
+  display: block;
+  line-height: 1.6;
+}
+.overtime-summary .overtime-balance {
+  display: block;
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--blue);
+  margin: 18px 0 8px;
+}
+.overtime-summary p,
+.overtime-setup > p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 12px 0 18px;
+}
+.overtime-summary > button {
+  margin-top: 4px;
+}
+.overtime-months,
+.overtime-history {
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+.overtime-heading {
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.overtime-heading p {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 7px;
+}
+.overtime-count {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.overtime-table-scroll {
+  overflow-x: auto;
+}
+.overtime-months table {
+  min-width: 560px;
+}
+.overtime-months th:not(:first-child),
+.overtime-months td:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.overtime-months td:last-child {
+  color: var(--blue);
+}
+.overtime-months tbody tr:hover {
+  background: var(--soft);
+}
+.overtime-footnote {
+  border-top: 1px solid var(--border);
+  padding: 15px 20px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.overtime-correction {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.overtime-correction > span {
+  color: var(--muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.overtime-symbol {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: var(--blue);
+  background: var(--soft);
+  border-radius: 10px;
+  flex: none;
+}
+.overtime-setup > p {
+  max-width: 640px;
+}
+.overtime-setup-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 260px));
+  gap: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+}
+.overtime-setup-form > button,
+.overtime-setup-form > .alert {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin: 0;
+}
+.overtime-dialog > p {
+  font-size: 12px;
+  color: var(--muted);
+}
+@media (max-width: 1100px) {
+  .overtime-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .overtime-correction {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .overtime-correction > span {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+@media (max-width: 600px) {
+  .overtime-setup-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .overtime-heading > button {
+    width: 100%;
+  }
+}

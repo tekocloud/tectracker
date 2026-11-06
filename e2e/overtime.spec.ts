@@ -58,7 +58,10 @@ test("Überstunden einrichten, korrigieren, wieder laden und getrennt je Profil 
     .getByRole("button", { name: "Überstundenkonto speichern" })
     .click();
   await expect(
-    page.getByText("Kontostand bis gestern · Heute voraussichtlich: −5:00:00"),
+    page
+      .locator(".overtime-metrics .metric")
+      .filter({ hasText: "HEUTE VORAUSSICHTLICH" })
+      .getByText("−5:00:00", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("cell", { name: "3:00:00", exact: true }),

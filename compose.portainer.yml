@@ -1,0 +1,15 @@
+# Docker Standalone: GitHub Actions publishes this image to GHCR.
+# Set TECTRACKER_IMAGE to select a release tag or your own image.
+services:
+  tectracker:
+    image: ${TECTRACKER_IMAGE:-ghcr.io/tekocloud/tectracker:latest}
+    restart: unless-stopped
+    ports:
+      - "${TECTRACKER_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

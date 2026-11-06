@@ -13,6 +13,96 @@ npm run dev
 
 Die Vorschau öffnet sich unter http://127.0.0.1:1420. Im Browser werden Daten ausschließlich im lokalen Browserspeicher abgelegt; die Desktop-App verwendet SQLite im Benutzer-App-Verzeichnis. Die beiden Speicher sind voneinander unabhängig. Für einen Umzug die JSON-Sicherung verwenden.
 
+## Web-Version für Docker und Portainer
+
+Die Web-Version verwendet dieselbe Oberfläche und Fachlogik wie die Desktop-App.
+Das mehrstufige `Dockerfile` erstellt die Web-Dateien und liefert sie mit Nginx
+ohne Root-Rechte auf Container-Port **8080** aus. Rust wird dafür nicht benötigt.
+Der Container enthält einen Healthcheck und kann mit schreibgeschütztem Dateisystem laufen.
+
+### Automatisches Image aus GitHub Actions
+
+Der Workflow `.github/workflows/web-image.yml` testet die App und veröffentlicht
+bei einem Push auf den Hauptbranch das Web-Image in der GitHub Container Registry:
+
+```text
+ghcr.io/tekocloud/tectracker:latest
+```
+
+Ein gemeinsames Image unterstützt **Linux amd64 und arm64**. Jeder Lauf veröffentlicht
+zusätzlich einen `sha-<vollständige-Commit-ID>`-Tag, mit dem sich ein bestimmter
+Stand gezielt bereitstellen lässt.
+`latest` folgt ausschließlich dem Hauptbranch. Der Workflow lässt sich auch manuell
+unter **Actions → Web Docker image → Run workflow** auf dem Hauptbranch starten.
+Builds von anderen Branches veröffentlichen kein Image.
+
+Zum Hochladen verwendet die Action das vorhandene `GITHUB_TOKEN` mit
+`packages: write`; ein zusätzliches Secret ist nicht erforderlich. Das Image wird
+über seine Metadaten mit dem Repository verknüpft und erscheint unter **Packages**.
+GitHub legt neue Container-Pakete zunächst privat an. Für einen Download ohne
+Anmeldung nach der ersten Veröffentlichung in den **Package settings → Change
+visibility → Public** wählen. Alternativ in Portainer eine Registry für `ghcr.io`
+mit einem GitHub-Benutzernamen und einem Token mit `read:packages` hinterlegen.
+
+### Image bei Bedarf lokal erstellen
+
+Im Projektverzeichnis auf dem Docker-Rechner ausführen:
+
+```sh
+docker build -t tectracker-web:local .
+```
+
+Wenn Portainer einen anderen Docker-Rechner verwaltet, muss das Image dort
+verfügbar sein. Entweder über eine eigene Registry verteilen oder als Datei übertragen:
+
+```sh
+docker save -o tectracker-web.tar tectracker-web:local
+# Datei auf den Zielrechner übertragen und dort ausführen:
+docker load -i tectracker-web.tar
+```
+
+Ein lokal erstelltes Image passt zur Architektur des Build-Rechners. Bei einem
+anderen Zielsystem explizit für dessen Architektur erstellen, beispielsweise
+`docker buildx build --platform linux/amd64 --load -t tectracker-web:local .`
+für einen x64-Server oder entsprechend `linux/arm64` für einen ARM64-Server.
+
+### In Portainer ausführen (Docker Standalone)
+
+1. Den erfolgreichen GitHub-Workflow abwarten und das Paket öffentlich freigeben
+   oder die GHCR-Zugangsdaten in Portainer hinterlegen.
+2. Unter **Stacks → Add stack → Web editor** den Inhalt von `compose.portainer.yml` einfügen.
+3. Optional die Stack-Umgebungsvariable `TECTRACKER_PORT` setzen (Standard: `8080`).
+   Standardmäßig wird `ghcr.io/tekocloud/tectracker:latest` verwendet.
+   Für eine bestimmte Version `TECTRACKER_IMAGE` auf den vollständigen Image-Namen
+   einschließlich SHA-Tag setzen. Für ein lokal gebautes Image
+   stattdessen `TECTRACKER_IMAGE=tectracker-web:local` verwenden.
+4. **Deploy the stack** wählen und `http://SERVER-IP:8080` öffnen
+   beziehungsweise den eingestellten Host-Port verwenden.
+
+Für Updates mit `latest` in Portainer den Stack aktualisieren und dabei das Image
+erneut herunterladen lassen (**Re-pull image and redeploy**).
+
+Der Stack verwendet ein schreibgeschütztes Dateisystem und ein temporäres `/tmp`.
+Es wird kein Daten-Volume benötigt, weil die Arbeitsdaten im Browser liegen.
+Für eine öffentliche Bereitstellung HTTPS über einen vorgeschalteten Reverse Proxy verwenden.
+Der Proxy leitet an Container-Port 8080 weiter; die Anwendung wird unter `/` bereitgestellt.
+
+### Daten und Sicherungen
+
+**Die Web-Version speichert ausschließlich im lokalen Browserspeicher.** Der
+Container stellt die App bereit und speichert keine Zeiterfassungsdaten. Andere
+Browser, Geräte und Browserprofile haben jeweils eigene Daten; eine gemeinsame
+Datenbank, Anmeldung oder Synchronisation ist nicht enthalten. Browserdaten
+löschen entfernt auch die dort gespeicherten Arbeitsdaten. Regelmäßig unter
+Einstellungen eine vollständige JSON-Sicherung herunterladen.
+
+Ein Container-Update erhält die Browserdaten, sofern Adresse, Protokoll und Port
+gleich bleiben. Beim Wechsel von HTTP auf HTTPS, auf eine andere Domain oder
+einen anderen Port vorher JSON exportieren und anschließend wieder importieren.
+Auch Daten der Desktop-App lassen sich über diese JSON-Sicherung übernehmen.
+Ein laufender Timer verwendet gespeicherte Zeitpunkte und läuft rechnerisch nach
+dem Schließen des Tabs weiter; Desktop-Tray-Funktionen stehen im Web nicht zur Verfügung.
+
 ## Desktop-App
 
 Zusätzlich Rust stable installieren. Windows benötigt die Microsoft C++ Build Tools inklusive Windows SDK und WebView2; macOS benötigt Xcode Command Line Tools.
@@ -25,6 +115,27 @@ npm run tauri build
 Das Fenster schließt in den Tray bzw. die Menüleiste. Dort lässt sich der Timer steuern und die App ausdrücklich beenden. Zeit läuft über Ruhemodus und App-Neustart hinweg weiter, bis der Eintrag beendet oder korrigiert wird.
 
 Installer liegen unter `src-tauri/target/release/bundle`. Die GitHub-Actions-Konfiguration baut Windows x64 sowie macOS ARM64 und x64 auf den jeweiligen Plattformen. Signierte Veröffentlichungen sind noch nicht eingerichtet: dafür werden Windows-Signatur und Apple Developer ID einschließlich Notarisierungszugang benötigt. Die Windows-Buildwerkzeuge und Rust sind eingerichtet. Der Windows-x64-Installer wurde erfolgreich gebaut und die native App mit Start/Stopp und SQLite-Speicherung geprüft. macOS-Pakete und Notarisierung benötigen einen macOS-Runner.
+
+## macOS: Meldung „App ist beschädigt“
+
+Die macOS-Pakete verwenden eine lokale Ad-hoc-Signatur für das vollständige App-Bundle. Der Release-Workflow prüft diese Signatur vor dem Hochladen mit `codesign --verify --deep --strict`. Eine Ad-hoc-Signatur bestätigt keine Entwickleridentität und ersetzt keine Apple-Notarisierung. Bei Downloads kann macOS daher weiterhin eine manuelle Freigabe verlangen. Für eine reguläre Veröffentlichung ohne diese Hürde sind ein Developer-ID-Zertifikat und die Notarisierung erforderlich.
+
+Das macOS-ARM64-Paket von Version 0.2.5 enthält lediglich die vom Linker erzeugte Signatur der ausführbaren Datei. Die Prüfung des vollständigen App-Bundles schlägt mit `code has no resources but signature indicates they must be present` fehl. Dieses Paket kann deshalb als „beschädigt“ abgewiesen werden.
+
+Für eine lokale Reparatur dieser eigenen, vertrauenswürdigen Version zuerst `TecTracker.app` aus der DMG nach `/Applications` kopieren. Anschließend im Terminal:
+
+```sh
+codesign --force --deep --sign - /Applications/TecTracker.app
+codesign --verify --deep --strict --verbose=2 /Applications/TecTracker.app
+```
+
+Falls macOS die heruntergeladene App danach weiterhin blockiert, lässt sich ausschließlich deren Download-Quarantäne entfernen:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/TecTracker.app
+```
+
+Dies gibt genau diese App lokal frei und ist nur für die eigene, vertrauenswürdige Kopie gedacht. Die systemweiten Sicherheitseinstellungen bleiben erhalten. Die Reparatur erfordert keinen Neubau und verändert keine gespeicherten TecTracker-Daten.
 
 ## GitHub Releases
 

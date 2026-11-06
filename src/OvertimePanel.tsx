@@ -1,4 +1,11 @@
 import { useState } from "react";
+import {
+  Clock3,
+  SlidersHorizontal,
+  History,
+  CalendarDays,
+  Wallet,
+} from "lucide-react";
 import { DateTime } from "luxon";
 import { duration, type Profile, type State } from "./core";
 import { overtime, parseHours } from "./overtime";
@@ -19,11 +26,16 @@ export function OvertimeCard({
 }) {
   const result = overtime(s, p, now);
   return (
-    <section className="card padded">
-      <h2>Überstunden</h2>
+    <section className="card padded overtime-summary">
+      <div className="overtime-title">
+        <Clock3 size={18} />
+        <h2>Überstunden</h2>
+      </div>
       {result ? (
         <>
-          <strong>{duration(result.balance)}</strong>
+          <strong className="overtime-balance">
+            {duration(result.balance)}
+          </strong>
           <p>
             Kontostand bis gestern · Heute voraussichtlich:{" "}
             {duration(result.preview)}
@@ -83,14 +95,19 @@ export default function OvertimePanel({
   }
   if (!result || !p.overtime)
     return (
-      <section className="card padded">
-        <h2>Überstundenkonto einrichten</h2>
+      <section className="card padded overtime-setup">
+        <div className="overtime-title">
+          <span className="overtime-symbol">
+            <Wallet size={21} />
+          </span>
+          <h2>Überstundenkonto einrichten</h2>
+        </div>
         <p>
           Der Anfangssaldo gilt zu Beginn des Startdatums. Danach zählen
           Nettoarbeitszeit und Sollzeit, auch an Tagen ohne Einträge.
         </p>
         <form
-          className="modal"
+          className="overtime-setup-form"
           onSubmit={(event) => {
             event.preventDefault();
             try {
@@ -124,7 +141,11 @@ export default function OvertimePanel({
               placeholder="12:30 oder -2:15"
             />
           </label>
-          {error && <p role="alert">{error}</p>}
+          {error && (
+            <p className="alert" role="alert">
+              {error}
+            </p>
+          )}
           <button className="primary">Überstundenkonto speichern</button>
         </form>
       </section>
@@ -132,42 +153,56 @@ export default function OvertimePanel({
   const account = p.overtime;
   return (
     <>
-      <section className="card padded">
-        <h2>Überstunden</h2>
-        <strong>{duration(result.balance)}</strong>
-        <p>
-          Kontostand bis gestern · Heute voraussichtlich:{" "}
-          {duration(result.preview)}
-        </p>
-      </section>
-      <section className="card padded">
-        <h2>Monatsübersicht</h2>
-        <p>
-          Anfangssaldo: {duration(account.openingSeconds)} · Beginn:{" "}
-          {germanDate(account.from)}
-        </p>
-        <p>
-          Der feste Kontostand umfasst abgeschlossene Tage. Heute ist eine
-          Live-Vorschau einschließlich der vollständigen Tagessollzeit.
-        </p>
-        <button
-          className="secondary"
-          disabled={account.from > yesterday}
-          onClick={() => {
-            setError("");
-            setDialog(true);
-          }}
+      <div className="metrics overtime-metrics">
+        <section className="card metric accent">
+          <div>KONTOSTAND</div>
+          <strong>{duration(result.balance)}</strong>
+          <small>Abgeschlossene Tage · bis {germanDate(yesterday)}</small>
+        </section>
+        <section className="card metric">
+          <div>HEUTE VORAUSSICHTLICH</div>
+          <strong>{duration(result.preview)}</strong>
+          <small>Live-Vorschau mit vollständiger Tagessollzeit</small>
+        </section>
+        <section className="card metric">
+          <div>ANFANGSSALDO</div>
+          <strong>{duration(account.openingSeconds)}</strong>
+          <small>Kontobeginn am {germanDate(account.from)}</small>
+        </section>
+      </div>
+      <section className="card overtime-months">
+        <div className="table-heading overtime-heading">
+          <div>
+            <div className="overtime-title">
+              <CalendarDays size={18} />
+              <h2>Monatsübersicht</h2>
+            </div>
+            <p>Arbeitszeitsaldo und Korrekturen im Monatsverlauf.</p>
+          </div>
+          <button
+            className="secondary"
+            disabled={account.from > yesterday}
+            onClick={() => {
+              setError("");
+              setDialog(true);
+            }}
+          >
+            <SlidersHorizontal size={15} /> Saldo anpassen
+          </button>
+        </div>
+        <div
+          className="overtime-table-scroll"
+          role="region"
+          aria-label="Monatsübersicht"
+          tabIndex={0}
         >
-          Saldo anpassen
-        </button>
-        <div style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
-                <th>Monat</th>
-                <th>Arbeitszeitsaldo</th>
-                <th>Korrekturen</th>
-                <th>Kontostand</th>
+                <th scope="col">Monat</th>
+                <th scope="col">Arbeitszeitsaldo</th>
+                <th scope="col">Korrekturen</th>
+                <th scope="col">Kontostand</th>
               </tr>
             </thead>
             <tbody>
@@ -181,25 +216,58 @@ export default function OvertimePanel({
                   </td>
                   <td>{duration(month.change)}</td>
                   <td>{duration(month.adjustment)}</td>
-                  <td>{duration(month.balance)}</td>
+                  <td>
+                    <strong>{duration(month.balance)}</strong>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         {!result.months.length && (
-          <p>Noch keine abgeschlossenen Tage vorhanden.</p>
+          <div className="empty">
+            <CalendarDays size={25} />
+            <h3>Noch keine abgeschlossenen Tage vorhanden.</h3>
+            <p>
+              Nach dem ersten abgeschlossenen Tag erscheint hier dein
+              Monatsverlauf.
+            </p>
+          </div>
         )}
+        <p className="overtime-footnote">
+          Der Kontostand umfasst abgeschlossene Tage. Heute wird als
+          Live-Vorschau einschließlich der vollständigen Tagessollzeit
+          angezeigt.
+        </p>
       </section>
-      <section className="card padded">
-        <h2>Korrekturverlauf</h2>
+      <section className="card overtime-history">
+        <div className="table-heading overtime-heading">
+          <div>
+            <div className="overtime-title">
+              <History size={18} />
+              <h2>Korrekturverlauf</h2>
+            </div>
+            <p>Manuelle Anpassungen deines Überstundenkontos.</p>
+          </div>
+          <span className="overtime-count">
+            {account.corrections.length}{" "}
+            {account.corrections.length === 1 ? "Anpassung" : "Anpassungen"}
+          </span>
+        </div>
         {!account.corrections.length && (
-          <p>Noch keine Saldoanpassungen vorhanden.</p>
+          <div className="empty">
+            <History size={25} />
+            <h3>Noch keine Saldoanpassungen vorhanden.</h3>
+            <p>
+              Auszahlungen oder übernommene Salden kannst du über „Saldo
+              anpassen“ eintragen.
+            </p>
+          </div>
         )}
         {[...account.corrections]
           .sort((a, b) => b.date.localeCompare(a.date))
           .map((c) => (
-            <div className="master-row" key={c.date}>
+            <div className="overtime-correction" key={c.date}>
               <strong>{germanDate(c.date)}</strong>
               <span>
                 Gesetzter Stand: {duration(c.seconds)} · Änderung:{" "}
@@ -232,7 +300,7 @@ export default function OvertimePanel({
       {dialog && (
         <Modal title="Saldo anpassen" onClose={() => setDialog(false)}>
           <form
-            className="modal"
+            className="modal overtime-dialog"
             onSubmit={(event) => {
               event.preventDefault();
               try {
@@ -301,7 +369,11 @@ export default function OvertimePanel({
               Der gesetzte Stand bleibt auch bei späteren Änderungen älterer
               Arbeitszeiten bestehen.
             </p>
-            {error && <p role="alert">{error}</p>}
+            {error && (
+              <p className="alert" role="alert">
+                {error}
+              </p>
+            )}
             <div className="modal-actions">
               <button
                 type="button"

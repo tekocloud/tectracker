@@ -56,6 +56,13 @@ jobs:
       - run: npm test
       - run: npx tauri icon public/logo.png
       - run: npx tauri build --target ${{ matrix.target }}
+      - name: Verify macOS app bundle signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/TecTracker.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
       - uses: actions/upload-artifact@v4
         with:
           name: tectracker-${{ matrix.target }}
