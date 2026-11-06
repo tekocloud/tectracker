@@ -114,7 +114,7 @@ npm run tauri build
 
 Das Fenster schließt in den Tray bzw. die Menüleiste. Dort lässt sich der Timer steuern und die App ausdrücklich beenden. Zeit läuft über Ruhemodus und App-Neustart hinweg weiter, bis der Eintrag beendet oder korrigiert wird.
 
-Installer liegen unter `src-tauri/target/release/bundle`. Die GitHub-Actions-Konfiguration baut Windows x64 sowie macOS ARM64 und x64 auf den jeweiligen Plattformen. Signierte Veröffentlichungen sind noch nicht eingerichtet: dafür werden Windows-Signatur und Apple Developer ID einschließlich Notarisierungszugang benötigt. Die Windows-Buildwerkzeuge und Rust sind eingerichtet. Der Windows-x64-Installer wurde erfolgreich gebaut und die native App mit Start/Stopp und SQLite-Speicherung geprüft. macOS-Pakete und Notarisierung benötigen einen macOS-Runner.
+Installer liegen unter `src-tauri/target/release/bundle`. Die GitHub-Actions-Konfiguration baut Windows x64 sowie macOS ARM64 (Apple Silicon) auf den jeweiligen Plattformen. Signierte Veröffentlichungen sind noch nicht eingerichtet: dafür werden Windows-Signatur und Apple Developer ID einschließlich Notarisierungszugang benötigt. Die Windows-Buildwerkzeuge und Rust sind eingerichtet. Der Windows-x64-Installer wurde erfolgreich gebaut und die native App mit Start/Stopp und SQLite-Speicherung geprüft. macOS-Pakete und Notarisierung benötigen einen macOS-Runner.
 
 ## macOS: Meldung „App ist beschädigt“
 
@@ -155,7 +155,7 @@ npm run version:set -- 0.2.3
 
 Ohne Versionsargument gleicht `npm run version:set` die anderen Dateien auf die bereits in `package.json` eingetragene Version ab. Anschließend alle geänderten Versionsdateien zusammen committen und pushen. Abhängigkeiten werden dabei nicht aktualisiert.
 
-Erst wenn alle drei Plattform-Builds erfolgreich sind, erstellt der Release-Job den Tag am gebauten Commit und einen Release-Entwurf, lädt die `.exe`-, `.msi`- und `.dmg`-Installer hoch und veröffentlicht das Release. Versionen mit einem Suffix wie `0.1.2-beta.1` werden als Vorabversion markiert. Andere Branches erzeugen ausschließlich Actions-Artefakte. Ein manueller Lauf über „Run workflow“ veröffentlicht ebenfalls, wenn der Hauptbranch oder ein passender Versions-Tag als Referenz ausgewählt ist.
+Erst wenn beide Desktop-Builds erfolgreich sind, erstellt der Release-Job den Tag am gebauten Commit und einen Release-Entwurf, lädt die `.exe`-, `.msi`- und `.dmg`-Installer hoch und veröffentlicht das Release. Versionen mit einem Suffix wie `0.1.2-beta.1` werden als Vorabversion markiert. Andere Branches erzeugen ausschließlich Actions-Artefakte. Ein manueller Lauf über „Run workflow“ veröffentlicht ebenfalls, wenn der Hauptbranch oder ein passender Versions-Tag als Referenz ausgewählt ist.
 
 Das automatische `GITHUB_TOKEN` erhält nur im Release-Job Schreibrechte; ein zusätzliches Token ist nicht nötig. Bereits veröffentlichte Releases werden bei erneuten Läufen unverändert beibehalten; der Schritt endet erfolgreich mit einem Hinweis in der Laufzusammenfassung. Für ein neues Release die App-Version erhöhen und die zugehörigen Lockdateien aktualisieren. Ein fehlgeschlagener Upload kann über einen erneuten Lauf desselben Commits fortgesetzt werden, solange das Release noch ein Entwurf ist. Existierende Tags werden nicht verschoben. Falls Repository- oder Organisationsregeln die Schreibrechte einschränken, müssen diese den Release-Job zulassen.
 
