@@ -26,6 +26,24 @@ Das Fenster schließt in den Tray bzw. die Menüleiste. Dort lässt sich der Tim
 
 Installer liegen unter `src-tauri/target/release/bundle`. Die GitHub-Actions-Konfiguration baut Windows x64 sowie macOS ARM64 und x64 auf den jeweiligen Plattformen. Signierte Veröffentlichungen sind noch nicht eingerichtet: dafür werden Windows-Signatur und Apple Developer ID einschließlich Notarisierungszugang benötigt. Die Windows-Buildwerkzeuge und Rust sind eingerichtet. Der Windows-x64-Installer wurde erfolgreich gebaut und die native App mit Start/Stopp und SQLite-Speicherung geprüft. macOS-Pakete und Notarisierung benötigen einen macOS-Runner.
 
+## GitHub Releases
+
+Ein gepushter Versions-Tag veröffentlicht die Installer automatisch unter [Releases](https://github.com/tekocloud/tectracker/releases). Für die aktuelle Version **0.1.1**:
+
+```sh
+git add .github/workflows/build.yml package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json src/App.tsx tsconfig.json README.md
+git commit -m "Publish desktop installers as GitHub releases; bump to 0.1.1"
+git push origin HEAD
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+Der Tag muss zur Version in `package.json`, `src-tauri/Cargo.toml` und `src-tauri/tauri.conf.json` passen. Die Oberfläche übernimmt ihre Version direkt aus `package.json`.
+
+Erst wenn alle drei Plattform-Builds erfolgreich sind, erstellt der Release-Job einen Entwurf, lädt die `.exe`-, `.msi`- und `.dmg`-Installer hoch und veröffentlicht das Release. Tags mit einem Suffix wie `v0.1.2-beta.1` werden als Vorabversion markiert. Normale Branch-Pushes erzeugen weiterhin Actions-Artefakte. Ein manueller Lauf über „Run workflow“ veröffentlicht ebenfalls, wenn ein Versions-Tag als Referenz ausgewählt ist.
+
+Das automatische `GITHUB_TOKEN` erhält nur im Release-Job Schreibrechte; ein zusätzliches Token ist nicht nötig. Bereits veröffentlichte Releases werden bei erneuten Läufen nicht überschrieben. Ein fehlgeschlagener Upload kann über einen erneuten Lauf fortgesetzt werden, solange das Release noch ein Entwurf ist. Falls Repository- oder Organisationsregeln die Schreibrechte einschränken, müssen diese den Release-Job zulassen.
+
 ## Bedienung
 
 1. Unter Einstellungen Profile und Wochenpläne anlegen. Ein Plan verteilt die Wochenstunden gleichmäßig auf die gewählten Tage und gilt ab seinem Datum.

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { version } from "../package.json";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { DateTime } from "luxon";
@@ -506,7 +507,7 @@ export default function App() {
             <span /> Lokal gespeichert
           </div>
           <p>Deine Zeit. Deine Daten.</p>
-          <small>TecTracker · 0.1.0</small>
+          <small>TecTracker · {version}</small>
         </div>
       </aside>
       <main>
